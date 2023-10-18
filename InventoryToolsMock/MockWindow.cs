@@ -322,10 +322,12 @@ public class MockWindow : Window
                 PluginService.WindowService.ToggleHelpWindow();
             }
 
+#if DEBUG
             if (ImGui.Button("Debug Window"))
             {
                 PluginService.WindowService.ToggleDebugWindow();
             }
+#endif
 
             if (ImGui.Button("Configuration Window"))
             {
