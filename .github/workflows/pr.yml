@@ -17,4 +17,4 @@ jobs:
           plugin_name: InventoryTools
           testing: "[Testing]"
           project_path: InventoryTools
-          plugin_owners: Critical_Impact
+          plugin_owners: ReiwaTech
