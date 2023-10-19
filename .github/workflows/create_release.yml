@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -17,4 +18,5 @@ jobs:
       build_configuration: Release
       personal_plugin_repo: ReiwaTech/DalamudPluginRepo
       personal_plugin_repo_branch: master
+      output_directory: ./InventoryTools/bin/Release
     secrets: inherit
