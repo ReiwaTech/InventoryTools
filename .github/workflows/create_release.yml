@@ -18,5 +18,5 @@ jobs:
       build_configuration: Release
       personal_plugin_repo: ReiwaTech/DalamudPluginRepo
       personal_plugin_repo_branch: master
-      output_directory: ./bin/Release
+      output_directory: ./InventoryTools/bin/Release
     secrets: inherit
