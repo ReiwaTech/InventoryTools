@@ -14,7 +14,7 @@ namespace InventoryTools.Extensions
         {
             DrawMenuItems(item);
             bool firstItem = true;
-            
+
             var craftFilters =
                 PluginService.FilterService.FiltersList.Where(c =>
                     c.FilterType == Logic.FilterType.CraftFilter && !c.CraftListDefault).ToArray();
@@ -52,7 +52,7 @@ namespace InventoryTools.Extensions
 
                             if (ImGui.Selectable("Add " + (part.Value?.CompanyCraftType.Value?.Name ?? "Unknown") + " to craft list - " + filter.Name))
                             {
-                                filter.CraftList.AddCraftItem(item.RowId, 1, InventoryItem.ItemFlags.None, index);
+                                filter.CraftList.AddCraftItem(item.RowId, 1, InventoryItem.ItemFlags.None);
                                 PluginService.WindowService.OpenCraftsWindow();
                                 PluginService.WindowService.GetCraftsWindow().FocusFilter(filter);
                                 filter.NeedsRefresh = true;
@@ -94,7 +94,7 @@ namespace InventoryTools.Extensions
                             PluginService.FrameworkService.RunOnTick(() =>
                             {
                                 var filter = PluginService.FilterService.AddNewCraftFilter();
-                                filter.CraftList.AddCraftItem(item.RowId,1, InventoryItem.ItemFlags.None, newPhase);
+                                filter.CraftList.AddCraftItem(item.RowId, 1, InventoryItem.ItemFlags.None, newPhase);
                                 PluginService.WindowService.OpenCraftsWindow();
                                 PluginService.WindowService.GetCraftsWindow().FocusFilter(filter);
                                 filter.NeedsRefresh = true;
@@ -196,7 +196,7 @@ namespace InventoryTools.Extensions
             }
 
         }
-        
+
         public static void DrawMenuItems(ItemEx item, uint? recipeId = null)
         {
             ImGui.Text(item.NameString);
@@ -263,9 +263,9 @@ namespace InventoryTools.Extensions
 
             if (ImGui.Selectable("More Information"))
             {
-                PluginService.WindowService.OpenItemWindow(item.RowId);   
+                PluginService.WindowService.OpenItemWindow(item.RowId);
             }
-            
+
         }
     }
 }
