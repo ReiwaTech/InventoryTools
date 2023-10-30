@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using CriticalCommonLib;
 using Dalamud.ContextMenu;
 using Dalamud.Game.Text.SeStringHandling;
@@ -133,6 +134,27 @@ public class ContextMenuService : IDisposable
                     new GameObjectContextMenuItem(new SeString(new TextPayload("(AT) More Information")),
                         selectedArgs => MoreInformationAction(gameObjectItemId.Value));
                 args.AddCustomItem(moreInformation);
+            }
+
+            if (args.ParentAddonName == "RecipeNote")
+            {
+                var craftFilters =
+                    PluginService.FilterService.FiltersList.Where(c =>
+                        c.FilterType == Logic.FilterType.CraftFilter && !c.CraftListDefault).ToArray();
+                foreach (var filter in craftFilters)
+                {
+                    SeString text = $"(AT) Add to {filter.Name}";
+                    var item = new GameObjectContextMenuItem(text, selectedArgs =>
+                    {
+                        filter.CraftList.AddCraftItem(gameObjectItemId.Value);
+                        PluginService.WindowService.OpenCraftsWindow();
+                        PluginService.WindowService.GetCraftsWindow().FocusFilter(filter);
+                        filter.NeedsRefresh = true;
+                        filter.StartRefresh();
+                    });
+
+                    args.AddCustomItem(item);
+                }
             }
         }
     }
