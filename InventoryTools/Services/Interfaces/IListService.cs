@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using InventoryTools.Logic;
+using InventoryTools.Logic.Columns;
 using InventoryTools.Logic.Filters;
 using Microsoft.Extensions.Hosting;
 
@@ -15,6 +16,7 @@ namespace InventoryTools.Services.Interfaces
         void AddDefaultColumns(FilterConfiguration configuration);
         FilterConfiguration DuplicateList(FilterConfiguration configuration, string newName);
         FilterConfiguration AddNewCraftList(string? name = null,bool? isEphemeral = false);
+        FilterConfiguration AddNewCuratedList(string? name = null);
         bool RemoveList(FilterConfiguration configuration);
         bool RemoveList(string name);
         bool RemoveFilterByKey(string key);
@@ -67,7 +69,8 @@ namespace InventoryTools.Services.Interfaces
         void ResetFilter(IEnumerable<IFilter> toReset, FilterConfiguration configuration, FilterConfiguration existingConfiguration);
 
         FilterConfiguration GenerateDefaultCraftList();
-        
+        void AddRecommendedColumns(IEnumerable<IColumn> columns, FilterConfiguration configuration);
+
         delegate void ListAddedDelegate(FilterConfiguration configuration);
         delegate void ListRemovedDelegate(FilterConfiguration configuration);
         delegate void ListConfigurationChangedDelegate(FilterConfiguration configuration);

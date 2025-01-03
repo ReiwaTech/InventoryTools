@@ -8,6 +8,8 @@ namespace InventoryTools.Logic.Filters
 {
     public class TableFreezeRowsFilter : IntegerFilter
     {
+        public override FilterType AvailableIn { get; set; } =
+            FilterType.SearchFilter | FilterType.CraftFilter | FilterType.SortingFilter | FilterType.GameItemFilter | FilterType.HistoryFilter | FilterType.CuratedList;
         public override string Key { get; set; } = "TableFreezeRows";
         public override string Name { get; set; } = "Freeze Columns";
 
@@ -16,9 +18,6 @@ namespace InventoryTools.Logic.Filters
 
         public override FilterCategory FilterCategory { get; set; } = FilterCategory.Columns;
 
-        public override FilterType AvailableIn { get; set; } =
-            FilterType.SearchFilter | FilterType.SortingFilter | FilterType.GameItemFilter | FilterType.CraftFilter | FilterType.HistoryFilter;
-        
         public override bool? FilterItem(FilterConfiguration configuration, InventoryItem item)
         {
             return null;
