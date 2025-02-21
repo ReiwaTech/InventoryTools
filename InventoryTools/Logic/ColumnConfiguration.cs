@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
+using AllaganLib.GameSheets.Caches;
 using Dalamud.Game.Text;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Common.Math;
 using ImGuiNET;
 using InventoryTools.Extensions;
 using InventoryTools.Logic.Columns;
+using InventoryTools.Logic.Editors;
 using Newtonsoft.Json;
 
 namespace InventoryTools.Logic;
@@ -17,7 +19,7 @@ public class ColumnConfiguration
     private string? _name;
     private string? _exportName;
     private bool _hiddenImGui;
-    
+
     public bool IsDirty { get; set; }
 
     public string ColumnName
@@ -46,6 +48,9 @@ public class ColumnConfiguration
 
     private Dictionary<string, string>? _stringSettings;
     private Dictionary<string, uint>? _uintSettings;
+    private Dictionary<string, List<ItemInfoType>>? _itemInfoTypes;
+    private Dictionary<string, List<InventorySearchScope>>? _inventorySearchScopes;
+
     [JsonIgnore]
     private IColumn _column;
 
@@ -74,6 +79,18 @@ public class ColumnConfiguration
         }
     }
 
+    public void SetSetting(string key, List<InventorySearchScope>? value)
+    {
+        if (value == null)
+        {
+            InventorySearchScopes.Remove(key);
+        }
+        else
+        {
+            InventorySearchScopes[key] = value;
+        }
+    }
+
     public void GetSetting(string key, out string? value)
     {
         value = StringSettings.ContainsKey(key) ? StringSettings[key] : null;
@@ -84,6 +101,28 @@ public class ColumnConfiguration
         value = UintSettings.ContainsKey(key) ? UintSettings[key] : null;
     }
 
+    public void GetSetting(string key, out List<ItemInfoType>? value)
+    {
+        value = ItemInfoTypes.ContainsKey(key) ? ItemInfoTypes[key] : null;
+    }
+
+    public void GetSetting(string key, out List<InventorySearchScope>? value)
+    {
+        value = InventorySearchScopes.ContainsKey(key) ? InventorySearchScopes[key] : null;
+    }
+
+    public void SetSetting(string key, List<ItemInfoType>? value)
+    {
+        if (value == null)
+        {
+            ItemInfoTypes.Remove(key);
+        }
+        else
+        {
+            ItemInfoTypes[key] = value;
+        }
+    }
+
     public ColumnConfiguration(string columnName)
     {
         _columnName = columnName;
@@ -92,9 +131,9 @@ public class ColumnConfiguration
 
     public ColumnConfiguration()
     {
-        
+
     }
-    
+
     private string _filterText = "";
 
     [JsonIgnore]
@@ -104,10 +143,10 @@ public class ColumnConfiguration
         set
         {
             _filterText = value.Replace((char)SeIconChar.Collectible,  ' ').Replace((char)SeIconChar.HighQuality, ' ');
-            _filterComparisonText = new ComparisonExtensions.FilterComparisonText(_filterText);
+            _filterComparisonText = new FilterComparisonExtensions.FilterComparisonText(_filterText);
         }
     }
-    
+
     public virtual bool DrawFilter(string tableKey, int columnIndex)
     {
         if (Column.FilterType == ColumnFilterType.Text)
@@ -214,7 +253,7 @@ public class ColumnConfiguration
                                 FilterText = "true";
                                 hasChanged = true;
                             }
-                            
+
                             if (ImGui.Selectable("No", currentItem == "No"))
                             {
                                 FilterText = "false";
@@ -234,16 +273,16 @@ public class ColumnConfiguration
         return false;
     }
 
-    private ComparisonExtensions.FilterComparisonText? _filterComparisonText;
+    private FilterComparisonExtensions.FilterComparisonText? _filterComparisonText;
 
     [JsonIgnore]
-    public ComparisonExtensions.FilterComparisonText FilterComparisonText
+    public FilterComparisonExtensions.FilterComparisonText FilterComparisonText
     {
         get
         {
             if (_filterComparisonText == null)
             {
-                _filterComparisonText = new ComparisonExtensions.FilterComparisonText(FilterText);
+                _filterComparisonText = new FilterComparisonExtensions.FilterComparisonText(FilterText);
             }
 
             return _filterComparisonText;
@@ -267,6 +306,18 @@ public class ColumnConfiguration
     {
         get => _uintSettings ??= new Dictionary<string, uint>();
         set => _uintSettings = value;
+    }
+
+    public Dictionary<string, List<ItemInfoType>> ItemInfoTypes
+    {
+        get => _itemInfoTypes ??= new Dictionary<string, List<ItemInfoType>>();
+        set => _itemInfoTypes = value;
+    }
+
+    public Dictionary<string, List<InventorySearchScope>> InventorySearchScopes
+    {
+        get => _inventorySearchScopes ??= new Dictionary<string, List<InventorySearchScope>>();
+        set => _inventorySearchScopes = value;
     }
 
 }

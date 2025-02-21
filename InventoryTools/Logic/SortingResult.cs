@@ -1,8 +1,9 @@
 ﻿using System.Numerics;
+using AllaganLib.GameSheets.Sheets.Rows;
 using CriticalCommonLib.Enums;
 using CriticalCommonLib.Interfaces;
 using CriticalCommonLib.Models;
-using CriticalCommonLib.Sheets;
+
 
 namespace InventoryTools.Logic
 {
@@ -65,13 +66,6 @@ namespace InventoryTools.Logic
 
         public Vector2 BagLocation => InventoryItem.BagLocation(_sourceBag);
 
-        public string GetExtraInformation()
-        {
-            string info = "";
-            info += (InventoryItem.Item.ObtainedGil ? "Can be bought" : "Can't be bought") + '\n';
-            return info;
-        }
-
         public uint ItemId {
             get => InventoryItem.ItemId;
             set
@@ -80,6 +74,6 @@ namespace InventoryTools.Logic
             }
         }
 
-        public ItemEx Item => InventoryItem.Item;
+        public ItemRow Item => InventoryItem.Item;
     }
 }

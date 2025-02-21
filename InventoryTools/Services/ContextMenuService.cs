@@ -3,13 +3,17 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using AllaganLib.GameSheets.Sheets;
+using CriticalCommonLib.Services;
 using CriticalCommonLib.Services.Mediator;
+
 using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using InventoryTools.Logic;
+using InventoryTools.Logic.Settings;
 using InventoryTools.Mediator;
 using InventoryTools.Services.Interfaces;
 using InventoryTools.Ui;
@@ -24,31 +28,37 @@ public class ContextMenuService : DisposableMediatorSubscriberBase, IHostedServi
     private readonly IListService _listService;
     private readonly IGameGui _gameGui;
     private readonly InventoryToolsConfiguration _configuration;
-    public const int SatisfactionSupplyItemIdx       = 0x54;
-    public const int SatisfactionSupplyItem1Id       = 0x80 + 1 * 0x3C;
-    public const int SatisfactionSupplyItem2Id       = 0x80 + 2 * 0x3C;
-    public const int ContentsInfoDetailContextItemId = 0x17CC;
-    public const int RecipeNoteContextItemId         = 0x398;
-    public const int AgentItemContextItemId          = 0x28;
-    public const int GatheringNoteContextItemId      = 0xA0;
-    public const int ItemSearchContextItemId         = 0x17D0;
-    public const int ChatLogContextMenuType          = ChatLogContextItemId + 0x8;
-    public const int ChatLogContextItemId            = 0x950;
-    
-    public const int SubmarinePartsMenuContextItemId            = 0x54;
-    public const int ShopExchangeItemContextItemId            = 0x54;
-    public const int ShopContextMenuItemId            = 0x54;
-    public const int ShopExchangeCurrencyContextItemId            = 0x54;
-    public const int HWDSupplyContextItemId            = 0x38C;
-    public const int GrandCompanySupplyListContextItemId            = 0x54;
-    public const int GrandCompanyExchangeContextItemId            = 0x54;
+    private readonly ItemSheet _itemSheet;
+    private readonly IGameInterface _gameInterface;
+    private readonly ContextMenuAddToCuratedListSetting _curatedListSetting;
+    public const int SatisfactionSupplyItemIdx       = 84;
+    public const int SatisfactionSupplyItem1Id       = 128 + 1 * 60;
+    public const int SatisfactionSupplyItem2Id       = 128 + 2 * 60;
+    public const int ContentsInfoDetailContextItemId = 6092;
+    public const int RecipeNoteContextItemId         = 920;
+    public const int AgentItemContextItemId          = 40;
+    public const int GatheringNoteContextItemId      = 160;
+    public const int ItemSearchContextItemId         = 6096;
+    public const int ChatLogContextMenuType          = ChatLogContextItemId + 8;
+    public const int ChatLogContextItemId            = 2392;
 
-    public ContextMenuService(ILogger<ContextMenuService> logger, IListService listService, IContextMenu contextMenu, IGameGui gameGui, MediatorService mediatorService, InventoryToolsConfiguration configuration) : base(logger, mediatorService)
+    public const int SubmarinePartsMenuContextItemId            = 84;
+    public const int ShopExchangeItemContextItemId            = 84;
+    public const int ShopContextMenuItemId            = 84;
+    public const int ShopExchangeCurrencyContextItemId            = 84;
+    public const int HWDSupplyContextItemId            = 908;
+    public const int GrandCompanySupplyListContextItemId            = 84;
+    public const int GrandCompanyExchangeContextItemId            = 84;
+
+    public ContextMenuService(ILogger<ContextMenuService> logger, IListService listService, IContextMenu contextMenu, IGameGui gameGui, MediatorService mediatorService, InventoryToolsConfiguration configuration, ItemSheet itemSheet, IGameInterface gameInterface, ContextMenuAddToCuratedListSetting curatedListSetting) : base(logger, mediatorService)
     {
         ContextMenu = contextMenu;
         _listService = listService;
         _gameGui = gameGui;
         _configuration = configuration;
+        _itemSheet = itemSheet;
+        _gameInterface = gameInterface;
+        _curatedListSetting = curatedListSetting;
     }
 
     private void MenuOpened(IMenuOpenedArgs args)
@@ -103,10 +113,59 @@ public class ContextMenuService : DisposableMediatorSubscriberBase, IHostedServi
                 args.AddMenuItem(menuItem);
             }
 
+            if (_curatedListSetting.CurrentValue(_configuration))
+            {
+                var menuItem = new MenuItem();
+                menuItem.Name = "Add to Curated List";
+                menuItem.PrefixChar = 'A';
+                menuItem.IsSubmenu = true;
+                menuItem.OnClicked += clickedArgs => OpenAddCuratedListSubmenu(clickedArgs, itemId);
+                args.AddMenuItem(menuItem);
+            }
+
+
+            if (_configuration.OpenCraftingLogContextMenu)
+            {
+                var item = _itemSheet.GetRowOrDefault(itemId.Value);
+                if (item != null && item.CanOpenCraftingLog)
+                {
+                    var menuItem = new MenuItem();
+                    menuItem.Name = "Open Crafting Log";
+                    menuItem.PrefixChar = 'A';
+                    menuItem.OnClicked += _ => _gameInterface.OpenCraftingLog(itemId.Value);
+                    args.AddMenuItem(menuItem);
+                }
+            }
+
+            if (_configuration.OpenGatheringLogContextMenu)
+            {
+                var item = _itemSheet.GetRowOrDefault(itemId.Value);
+                if (item != null && item.CanOpenGatheringLog)
+                {
+                    var menuItem = new MenuItem();
+                    menuItem.Name = "Open Gathering Log";
+                    menuItem.PrefixChar = 'A';
+                    menuItem.OnClicked += _ => _gameInterface.OpenGatheringLog(itemId.Value);
+                    args.AddMenuItem(menuItem);
+                }
+            }
+            if (_configuration.OpenFishingLogContextMenu)
+            {
+                var item = _itemSheet.GetRowOrDefault(itemId.Value);
+                if (item != null && item.CanOpenFishingLog)
+                {
+                    var menuItem = new MenuItem();
+                    menuItem.Name = "Open Fishing Log";
+                    menuItem.PrefixChar = 'A';
+                    menuItem.OnClicked += _ => _gameInterface.OpenFishingLog(itemId.Value, item.ObtainedSpearFishing);
+                    args.AddMenuItem(menuItem);
+                }
+            }
+
 
         }
     }
-    
+
     private uint? GetGameObjectItemId(IMenuOpenedArgs args)
     {
         var item = args.AddonName switch
@@ -143,7 +202,7 @@ public class ContextMenuService : DisposableMediatorSubscriberBase, IHostedServi
 
         return item;
     }
-    
+
     private uint GetObjectItemId(uint itemId)
     {
         if (itemId > 500000)
@@ -151,13 +210,13 @@ public class ContextMenuService : DisposableMediatorSubscriberBase, IHostedServi
 
         return itemId;
     }
-    
+
     private unsafe uint? GetObjectItemId(IntPtr agent, int offset)
         => agent != IntPtr.Zero ? GetObjectItemId(*(uint*)(agent + offset)) : null;
 
     private uint? GetObjectItemId(string name, int offset)
         => GetObjectItemId(_gameGui.FindAgentInterface(name), offset);
-    
+
     private unsafe uint? HandleSatisfactionSupply()
     {
         var agent = _gameGui.FindAgentInterface("SatisfactionSupply");
@@ -206,18 +265,41 @@ public class ContextMenuService : DisposableMediatorSubscriberBase, IHostedServi
             menuItems.Add(menuItem);
         }
 
-        var newButton = new MenuItem(); 
+        var newButton = new MenuItem();
         newButton.Name = "Add to New Craft List";
         newButton.OnClicked += args => AddToNewCraftList(args, itemId);
         menuItems.Add(newButton);
 
-        newButton = new MenuItem(); 
+        newButton = new MenuItem();
         newButton.Name = "Add to New Ephemeral Craft List";
         newButton.OnClicked += args => AddToNewEphemeralCraftList(args, itemId);
         menuItems.Add(newButton);
         obj.OpenSubmenu(menuItems);
     }
-    
+
+    private void OpenAddCuratedListSubmenu(IMenuItemClickedArgs obj, uint? itemId = null)
+    {
+        var curatedLists = _listService.Lists.Where(c => c.FilterType == FilterType.CuratedList).ToList();
+        var menuItems = new List<MenuItem>();
+        foreach (var curatedList in curatedLists)
+        {
+            var menuItem = new MenuItem();
+            menuItem.Name = curatedList.Name;
+            menuItem.OnClicked += args =>
+            {
+                AddToCuratedList(curatedList, args, itemId);
+            };
+            menuItems.Add(menuItem);
+        }
+
+        var newButton = new MenuItem();
+        newButton.Name = "Add to New Curated List";
+        newButton.OnClicked += args => AddToNewCuratedList(args, itemId);
+        menuItems.Add(newButton);
+
+        obj.OpenSubmenu(menuItems);
+    }
+
     private unsafe IntPtr AgentById(AgentId id)
     {
         var uiModule = (UIModule*)_gameGui.GetUIModule();
@@ -225,7 +307,7 @@ public class ContextMenuService : DisposableMediatorSubscriberBase, IHostedServi
         var agent    = agents->GetAgentByInternalId(id);
         return (IntPtr)agent;
     }
-    
+
     private void AddToNewCraftList(IMenuItemClickedArgs obj, uint? itemId = null)
     {
         if (obj.Target is MenuTargetInventory inventory)
@@ -241,7 +323,23 @@ public class ContextMenuService : DisposableMediatorSubscriberBase, IHostedServi
             MediatorService.Publish(new AddToNewCraftListMessage(itemId.Value, 1, InventoryItem.ItemFlags.None, false));
         }
     }
-    
+
+    private void AddToNewCuratedList(IMenuItemClickedArgs obj, uint? itemId = null)
+    {
+        if (obj.Target is MenuTargetInventory inventory)
+        {
+            if (inventory.TargetItem != null)
+            {
+                itemId ??= inventory.TargetItem.Value.ItemId;
+                MediatorService.Publish(new AddToNewCuratedListMessage(itemId.Value, 1, inventory.TargetItem.Value.IsHq ? InventoryItem.ItemFlags.HighQuality : InventoryItem.ItemFlags.None));
+            }
+        }
+        else if(itemId != null)
+        {
+            MediatorService.Publish(new AddToNewCuratedListMessage(itemId.Value, 1, InventoryItem.ItemFlags.None));
+        }
+    }
+
     private void AddToNewEphemeralCraftList(IMenuItemClickedArgs obj, uint? itemId = null)
     {
         if (obj.Target is MenuTargetInventory inventory)
@@ -274,6 +372,22 @@ public class ContextMenuService : DisposableMediatorSubscriberBase, IHostedServi
         }
     }
 
+    private void AddToCuratedList(FilterConfiguration craftList, IMenuItemClickedArgs obj, uint? itemId = null)
+    {
+        if (obj.Target is MenuTargetInventory inventory)
+        {
+            if (inventory.TargetItem != null)
+            {
+                itemId ??= inventory.TargetItem.Value.ItemId;
+                MediatorService.Publish(new AddToCuratedListMessage(craftList.Key, itemId.Value, 1, inventory.TargetItem.Value.IsHq ? InventoryItem.ItemFlags.HighQuality : InventoryItem.ItemFlags.None));
+            }
+        }
+        else if(itemId != null)
+        {
+            MediatorService.Publish(new AddToCuratedListMessage(craftList.Key, itemId.Value, 1, InventoryItem.ItemFlags.None));
+        }
+    }
+
     private void MoreInformationClicked(IMenuItemClickedArgs obj, uint? itemId = null)
     {
         if (obj.Target is MenuTargetInventory inventory)
@@ -289,7 +403,7 @@ public class ContextMenuService : DisposableMediatorSubscriberBase, IHostedServi
             MediatorService.Publish(new OpenUintWindowMessage(typeof(ItemWindow), itemId.Value));
         }
     }
-    
+
     private void ItemSearchClicked(IMenuItemClickedArgs obj, uint? itemId = null)
     {
         if (obj.Target is MenuTargetInventory inventory)

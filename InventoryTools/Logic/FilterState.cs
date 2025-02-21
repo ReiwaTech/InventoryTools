@@ -1,31 +1,33 @@
-using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Numerics;
+using AllaganLib.GameSheets.Model;
 using CriticalCommonLib;
+using CriticalCommonLib.Crafting;
 using CriticalCommonLib.Enums;
 using CriticalCommonLib.Extensions;
 using CriticalCommonLib.Models;
 using CriticalCommonLib.Services;
 using CriticalCommonLib.Services.Ui;
 using InventoryTools.Services;
-using Lumina.Excel.GeneratedSheets;
+using Lumina.Excel;
+using Lumina.Excel.Sheets;
 using Microsoft.Extensions.Logging;
 
 namespace InventoryTools.Logic
 {
     public class FilterState
     {
-        public FilterState(ILogger<FilterState> logger, ICharacterMonitor characterMonitor, WindowService windowService, IGameUiManager gameUiManager, IInventoryMonitor inventoryMonitor, ExcelCache excelCache, InventoryToolsConfiguration configuration)
+        public FilterState(ILogger<FilterState> logger, ICharacterMonitor characterMonitor, WindowService windowService, IGameUiManager gameUiManager, IInventoryMonitor inventoryMonitor, InventoryToolsConfiguration configuration, ExcelSheet<CabinetCategory> cabinetCategorySheet)
         {
             _logger = logger;
             _characterMonitor = characterMonitor;
             _windowService = windowService;
             _gameUiManager = gameUiManager;
             _inventoryMonitor = inventoryMonitor;
-            _excelCache = excelCache;
             _configuration = configuration;
+            _cabinetCategorySheet = cabinetCategorySheet;
         }
 
         public void Initialize(FilterConfiguration filterConfiguration)
@@ -39,8 +41,8 @@ namespace InventoryTools.Logic
         private readonly WindowService _windowService;
         private readonly IGameUiManager _gameUiManager;
         private readonly IInventoryMonitor _inventoryMonitor;
-        private readonly ExcelCache _excelCache;
         private readonly InventoryToolsConfiguration _configuration;
+        private readonly ExcelSheet<CabinetCategory> _cabinetCategorySheet;
         public RenderTableBase? FilterTable;
         public ulong? ActiveRetainerId => _characterMonitor.ActiveRetainerId == 0 ? null : _characterMonitor.ActiveRetainerId;
         public ulong? ActiveFreeCompanyId => _characterMonitor.ActiveFreeCompanyId == 0 ? null : _characterMonitor.ActiveFreeCompanyId;
@@ -183,7 +185,7 @@ namespace InventoryTools.Logic
             }
         }
 
-        public List<Vector4?> GetSelectIconStringItems(List<SearchResult>? resultOverride = null)
+        public List<Vector4?> GetSelectIconStringItems(List<IShop> shops, List<SearchResult>? resultOverride = null)
         {
             var itemHighlights = new List<Vector4?>();
             if (_characterMonitor.ActiveCharacterId == 0)
@@ -196,8 +198,7 @@ namespace InventoryTools.Logic
                 HashSet<uint> requiredItems;
                 if (FilterConfiguration.FilterType == FilterType.CraftFilter)
                 {
-                    _logger.LogTrace("Craft filter, getting flattened materials");
-                    requiredItems = FilterConfiguration.CraftList.GetFlattenedMaterials().Select(c => c.Item.RowId).Distinct()
+                    requiredItems = FilterConfiguration.CraftList.GetFlattenedMergedMaterials().Where(c => c.IngredientPreference.Type is IngredientPreferenceType.Buy or IngredientPreferenceType.Item or IngredientPreferenceType.HouseVendor ).Select(c => c.Item.RowId).Distinct()
                         .ToHashSet();
                 }
                 else if (filterResult.Count != 0)
@@ -206,52 +207,41 @@ namespace InventoryTools.Logic
                 }
                 else
                 {
-                    return itemHighlights;
+                    requiredItems = new HashSet<uint>();
                 }
 
-
-                var target = Service.Targets.Target;
-                    if (target != null)
-                    {
-                        _logger.LogTrace("Target found for SelectIconString");
-
-                        var npcId = target.DataId;
-                        var npc = _excelCache.ENpcCollection?.Get(npcId);
-                        if (npc != null && npc.Base != null)
-                        {
-                            _logger.LogTrace("NPC found for SelectIconString");
-                            //TODO: Probably need to deal with custom talk and shit
-                            for (var index = 0; index < npc.Base.ENpcData.Length; index++)
-                            {
-                                var talkItem = npc.Base.ENpcData[index];
-                                var preHandler = _excelCache.GetPreHandlerSheet().GetRow(talkItem);
-                                if (preHandler != null)
-                                {
-                                    talkItem = preHandler.Target;
-                                }
-                                var shop = _excelCache.ShopCollection?.GetShop(talkItem);
-                                if (shop != null)
-                                {
-                                    _logger.LogTrace("Shop found for SelectIconString");
-                                    var shouldHighlight = shop.Items.Any(c => requiredItems.Contains(c.Row));
-                                    if (shouldHighlight)
-                                    {
-                                        _logger.LogTrace("Found item for shop" + shop.RowId);
-                                        itemHighlights.Add(FilterConfiguration.RetainerListColor ?? _configuration.RetainerListColor);
-                                    }
-                                    else
-                                    {
-                                        _logger.LogTrace("Did not find item for shop" + shop.RowId);
-                                        itemHighlights.Add(null);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    return itemHighlights;
+                foreach (var shop in shops)
+                {
+                    var shouldHighlight = shop.Items.Any(c => requiredItems.Contains(c.RowId));
+                    itemHighlights.Add(shouldHighlight ? FilterConfiguration.RetainerListColor ?? _configuration.RetainerListColor : null);
+                }
             }
 
             return itemHighlights;
+        }
+
+        public HashSet<uint> GetItemIds(List<SearchResult>? resultOverride = null)
+        {
+            var itemIds = new HashSet<uint>();
+            if (_characterMonitor.ActiveCharacterId == 0)
+            {
+                return itemIds;
+            }
+            var filterResult = resultOverride ?? FilterResult;
+            if (filterResult != null)
+            {
+                if (FilterConfiguration.FilterType == FilterType.CraftFilter)
+                {
+                    itemIds = FilterConfiguration.CraftList.GetFlattenedMergedMaterials().Where(c => c.IngredientPreference.Type is IngredientPreferenceType.Buy or IngredientPreferenceType.Item or IngredientPreferenceType.HouseVendor).Select(c => c.Item.RowId).Distinct()
+                        .ToHashSet();
+                }
+                else if (filterResult.Count != 0)
+                {
+                    itemIds = filterResult.Select(c => c.Item.RowId).Distinct().ToHashSet();
+                }
+            }
+
+            return itemIds;
         }
 
         public Dictionary<string, Vector4?> GetArmoireHighlights(List<SearchResult>? resultOverride = null)
@@ -313,7 +303,7 @@ namespace InventoryTools.Logic
             return new Dictionary<string, Vector4?>();
         }
 
-        public Dictionary<uint, Vector4?> GetArmoireTabHighlights(CabinetCategory? currentCategory, List<SearchResult>? resultOverride = null)
+        public Dictionary<uint, Vector4?> GetArmoireTabHighlights(List<SearchResult>? resultOverride = null)
         {
             var bagHighlights = new Dictionary<uint, Vector4?>();
             if (_characterMonitor.ActiveCharacterId == 0)
@@ -337,14 +327,18 @@ namespace InventoryTools.Logic
                     }
                     return c.SortingResult is {SourceBag: InventoryType.Armoire};
                 });
-                var cabinetDictionary = _excelCache.GetCabinetCategorySheet().Where(c => c.Category.Row != 0).ToDictionary(c => c.Category.Row, c => (uint)c.MenuOrder - 1);
+                var cabinetDictionary = _cabinetCategorySheet.Where(c => c.Category.RowId != 0).ToDictionary(c => c.Category.RowId, c => (uint)c.MenuOrder - 1);
                 foreach (var item in filteredItems)
                 {
+                    if (item.Item.CabinetCategory == null)
+                    {
+                        continue;
+                    }
                     if((MatchesFilter(FilterConfiguration, item, InvertHighlighting) || MatchesRetainerFilter(FilterConfiguration, item, InvertHighlighting)))
                     {
-                        if (cabinetDictionary.ContainsKey(item.Item.CabinetCategory) && !bagHighlights.ContainsKey(cabinetDictionary[item.Item.CabinetCategory]))
+                        if (cabinetDictionary.ContainsKey(item.Item.CabinetCategory.RowId) && !bagHighlights.ContainsKey(cabinetDictionary[item.Item.CabinetCategory.RowId]))
                         {
-                            bagHighlights.Add(cabinetDictionary[item.Item.CabinetCategory], TabHighlightColor);
+                            bagHighlights.Add(cabinetDictionary[item.Item.CabinetCategory.RowId], TabHighlightColor);
                         }
                     }
                 }
@@ -396,12 +390,12 @@ namespace InventoryTools.Logic
             var bagLayout = GenerateBagLayout(inventoryType);
 
             var filteredItems = inventoryContents.Where(c =>
-                AtkInventoryMiragePrismBox.EquipSlotCategoryToDresserTab(c.EquipSlotCategory) ==
+                AtkInventoryMiragePrismBox.EquipSlotCategoryToDresserTab(c.Item.Base.EquipSlotCategory.ValueNullable) ==
                 dresserTab);
 
             if (classJobSelected != 0)
             {
-                filteredItems = filteredItems.Where(c => _excelCache.IsItemEquippableBy(c.Item.ClassJobCategory.Row, classJobSelected));
+                filteredItems = filteredItems.Where(c => c.Item.ClassJobCategory?.ClassJobIds.Contains(classJobSelected) ?? false);
             }
 
             if (displayEquippableOnly && _characterMonitor.ActiveCharacter != null)

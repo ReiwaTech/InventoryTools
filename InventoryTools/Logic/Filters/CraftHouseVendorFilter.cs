@@ -1,7 +1,8 @@
 using System.Collections.Generic;
+using AllaganLib.GameSheets.Sheets.Rows;
 using CriticalCommonLib.Crafting;
 using CriticalCommonLib.Models;
-using CriticalCommonLib.Sheets;
+
 using InventoryTools.Logic.Filters.Abstract;
 using InventoryTools.Services;
 using Microsoft.Extensions.Logging;
@@ -32,7 +33,7 @@ public class CraftHouseVendorFilter : ChoiceFilter<HouseVendorSetting>
     public override string HelpText { get; set; } =
         "How should house vendor items be grouped?";
 
-    public override FilterCategory FilterCategory { get; set; } = FilterCategory.Basic;
+    public override FilterCategory FilterCategory { get; set; } = FilterCategory.Settings;
     public override HouseVendorSetting DefaultValue { get; set; } = HouseVendorSetting.Together;
     public override FilterType AvailableIn { get; set; } = FilterType.CraftFilter;
     public override bool? FilterItem(FilterConfiguration configuration, InventoryItem item)
@@ -40,7 +41,7 @@ public class CraftHouseVendorFilter : ChoiceFilter<HouseVendorSetting>
         return null;
     }
 
-    public override bool? FilterItem(FilterConfiguration configuration, ItemEx item)
+    public override bool? FilterItem(FilterConfiguration configuration, ItemRow item)
     {
         return null;
     }

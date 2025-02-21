@@ -7,7 +7,7 @@ namespace InventoryTools.Logic.Settings
     public class TooltipDisplayAmountOwnedSetting : BooleanSetting
     {
         public override bool DefaultValue { get; set; } = true;
-        
+
         public override bool CurrentValue(InventoryToolsConfiguration configuration)
         {
             return configuration.TooltipDisplayAmountOwned;
@@ -19,15 +19,15 @@ namespace InventoryTools.Logic.Settings
         }
 
         public override string Key { get; set; } = "TooltipDisplayOwned";
-        public override string Name { get; set; } = "Add Amount Owned";
+        public override string Name { get; set; } = "Add Item Locations";
 
-        public override string WizardName { get; } = "Amount Owned";
+        public override string WizardName { get; } = "Add Item Locations";
 
         public override string HelpText { get; set; } =
-            "When hovering an item, should the tooltip contain information about where the items are located.";
+            "When hovering an item, should the tooltip show the locations of any copies of the item you currently own?";
 
         public override SettingCategory SettingCategory { get; set; } = SettingCategory.ToolTips;
-        public override SettingSubCategory SettingSubCategory { get; } = SettingSubCategory.Subsetting;
+        public override SettingSubCategory SettingSubCategory { get; } = SettingSubCategory.AddItemLocations;
         public override string Version => "1.7.0.0";
 
         public TooltipDisplayAmountOwnedSetting(ILogger<TooltipDisplayAmountOwnedSetting> logger, ImGuiService imGuiService) : base(logger, imGuiService)

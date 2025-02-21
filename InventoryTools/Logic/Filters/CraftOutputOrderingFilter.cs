@@ -1,7 +1,8 @@
 using System.Collections.Generic;
+using AllaganLib.GameSheets.Sheets.Rows;
 using CriticalCommonLib.Crafting;
 using CriticalCommonLib.Models;
-using CriticalCommonLib.Sheets;
+
 using InventoryTools.Logic.Filters.Abstract;
 using InventoryTools.Services;
 using Microsoft.Extensions.Logging;
@@ -33,7 +34,7 @@ public class CraftOutputOrderingFilter : ChoiceFilter<OutputOrderingSetting>
     public override string HelpText { get; set; } =
         "Should the list of output items be ordered in a specific way?";
 
-    public override FilterCategory FilterCategory { get; set; } = FilterCategory.Basic;
+    public override FilterCategory FilterCategory { get; set; } = FilterCategory.Settings;
     public override OutputOrderingSetting DefaultValue { get; set; } = OutputOrderingSetting.AsAdded;
     public override FilterType AvailableIn { get; set; } = FilterType.CraftFilter;
     public override bool? FilterItem(FilterConfiguration configuration, InventoryItem item)
@@ -41,7 +42,7 @@ public class CraftOutputOrderingFilter : ChoiceFilter<OutputOrderingSetting>
         return null;
     }
 
-    public override bool? FilterItem(FilterConfiguration configuration, ItemEx item)
+    public override bool? FilterItem(FilterConfiguration configuration, ItemRow item)
     {
         return null;
     }

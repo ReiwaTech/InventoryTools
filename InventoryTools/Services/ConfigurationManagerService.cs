@@ -8,10 +8,10 @@ using System.Threading;
 using CriticalCommonLib.Interfaces;
 using CriticalCommonLib.Models;
 using CriticalCommonLib.Resolvers;
-using DalaMock.Shared.Interfaces;
 using Dalamud.Plugin.Services;
 using InventoryTools.Converters;
 using LuminaSupplemental.Excel.Model;
+using LuminaSupplemental.Excel.Services;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -29,6 +29,7 @@ namespace InventoryTools.Services
         public delegate void ConfigurationChangedDelegate();
         private readonly IFramework _framework;
         private bool _configurationLoaded = false;
+        private Task? _currentInventorySaveTask = null;
 
         public event ConfigurationChangedDelegate? ConfigurationChanged;
 
@@ -309,6 +310,15 @@ namespace InventoryTools.Services
 
         }
 
+        public Task SaveInventoriesAsync(List<InventoryItem> items)
+        {
+            if (_currentInventorySaveTask == null || _currentInventorySaveTask.IsCompleted || _currentInventorySaveTask.IsFaulted)
+            {
+                _currentInventorySaveTask = Task.Run(() => SaveInventories(items));
+            }
+            return _currentInventorySaveTask;
+        }
+
         public bool SaveInventories(List<InventoryItem> items)
         {
             return CsvLoader.ToCsvRaw<InventoryItem>(items, Path.Join(_pluginInterfaceService.ConfigDirectory.FullName, "inventories.csv"));
@@ -321,7 +331,7 @@ namespace InventoryTools.Services
             {
                 try
                 {
-                    var items = CsvLoader.LoadCsv<InventoryItem>(inventoryCsv, out _);
+                    var items = CsvLoader.LoadCsv<InventoryItem>(inventoryCsv, false, out _, out _);
                     success = true;
                     return items;
                 }
@@ -349,7 +359,7 @@ namespace InventoryTools.Services
             {
                 try
                 {
-                    var items = CsvLoader.LoadCsv<InventoryChange>(historyCsv, out _);
+                    var items = CsvLoader.LoadCsv<InventoryChange>(historyCsv, false, out _, out _);
                     success = true;
                     return items;
                 }

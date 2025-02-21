@@ -16,5 +16,8 @@ namespace InventoryTools.Logic.Settings.Abstract
         TitleMenuButtons = 11,
         AutoSave = 12,
         Misc = 13,
+        CraftOverlay = 14,
+        Items = 15,
+        Highlighting = 16,
     }
 }

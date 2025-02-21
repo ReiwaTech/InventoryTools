@@ -1,8 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
+using AllaganLib.GameSheets.Caches;
+using AllaganLib.GameSheets.Extensions;
+using AllaganLib.GameSheets.Model;
+using AllaganLib.GameSheets.Service;
+using AllaganLib.Shared.Time;
 using Autofac;
 using Autofac.Extensions.DependencyInjection;
 using Autofac.Util;
@@ -14,17 +20,18 @@ using CriticalCommonLib.MarketBoard;
 using CriticalCommonLib.Services;
 using CriticalCommonLib.Services.Mediator;
 using CriticalCommonLib.Services.Ui;
-using CriticalCommonLib.Time;
+
 using DalaMock.Host.Factories;
 using DalaMock.Host.Hosting;
+
 using DalaMock.Shared.Classes;
 using DalaMock.Shared.Interfaces;
 using Dalamud.Game.ClientState.Objects;
 using Dalamud.Interface.ImGuiFileDialog;
-using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using InventoryTools.Commands;
+using InventoryTools.Highlighting;
 using InventoryTools.Host;
 using InventoryTools.Hotkeys;
 using InventoryTools.IPC;
@@ -35,6 +42,8 @@ using InventoryTools.Logic.Columns.Abstract.ColumnSettings;
 using InventoryTools.Logic.Editors;
 using InventoryTools.Logic.Features;
 using InventoryTools.Logic.Filters;
+using InventoryTools.Logic.GenericFilters;
+using InventoryTools.Logic.ItemRenderers;
 using InventoryTools.Logic.Settings.Abstract;
 using InventoryTools.Misc;
 using InventoryTools.Overlays;
@@ -43,6 +52,9 @@ using InventoryTools.Services.Interfaces;
 using InventoryTools.Tooltips;
 using InventoryTools.Ui;
 using InventoryTools.Ui.Pages;
+using Lumina;
+using Lumina.Excel;
+using LuminaSupplemental.Excel.Model;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -54,8 +66,9 @@ namespace InventoryTools
     public class InventoryToolsPlugin : HostedPlugin
     {
         private readonly IPluginLog _pluginLog;
+        private readonly IFramework _framework;
         private Service? _service;
-        private IDalamudPluginInterface PluginInterface { get; set; }
+        private IDalamudPluginInterface? PluginInterface { get; set; }
 
         public InventoryToolsPlugin(IDalamudPluginInterface pluginInterface, IPluginLog pluginLog,
             IAddonLifecycle addonLifecycle, IChatGui chatGui, IClientState clientState, ICommandManager commandManager,
@@ -69,18 +82,25 @@ namespace InventoryTools
             objectTable, targetManager, textureProvider,
             toastGui, contextMenu, titleScreenMenu)
         {
+            Stopwatch loadConfigStopwatch = new Stopwatch();
+            loadConfigStopwatch.Start();
+            pluginLog.Verbose("Starting Allagan Tools.");
             _pluginLog = pluginLog;
+            _framework = framework;
             PluginInterface = pluginInterface;
             _service = PluginInterface.Create<Service>()!;
-            CreateHost();
+            this.Host = CreateHost();
 
             Start();
-
+            this.Host.Services.GetRequiredService<MediatorService>().Publish(new PluginLoadedMessage());
+            loadConfigStopwatch.Stop();
+            pluginLog.Verbose("Took " + loadConfigStopwatch.Elapsed.TotalSeconds + " to start Allagan Tools.");
         }
+
+        public IHost Host { get; set; }
 
         private List<Type> HostedServices { get; } = new()
         {
-            typeof(ExcelCache),
             typeof(ConfigurationManagerService),
             typeof(ContextMenuService),
             typeof(ListService),
@@ -104,7 +124,6 @@ namespace InventoryTools
             typeof(IPCService),
             typeof(HostedCraftMonitor),
             typeof(ItemSearchService),
-
         };
 
         public List<Type> GetHostedServices()
@@ -129,7 +148,7 @@ namespace InventoryTools
         public override void PreBuild(IHostBuilder hostBuilder)
         {
             hostBuilder
-                .UseContentRoot(PluginInterface.ConfigDirectory.FullName)
+                .UseContentRoot(PluginInterface!.ConfigDirectory.FullName)
                 .ConfigureLogging(lb =>
                 {
                     lb.ClearProviders();
@@ -163,7 +182,7 @@ namespace InventoryTools
                     HashSet<Type> singletons = new HashSet<Type>()
                     {
                         typeof(IHotkey), typeof(BaseTooltip), typeof(IAtkOverlay), typeof(IColumn),
-                        typeof(IGameOverlay), typeof(IFilter), typeof(ISetting), typeof(IColumnSetting),
+                        typeof(IGameOverlay), typeof(ISetting), typeof(IColumnSetting),
                         typeof(IFeature)
                     };
 
@@ -217,6 +236,42 @@ namespace InventoryTools
                             }
                         }
                     }
+
+                    var dataAccess = Assembly.GetExecutingAssembly();
+
+                    builder.RegisterAssemblyTypes(dataAccess)
+                        .Where(t => t.Name.EndsWith("Renderer"))
+                        .AsSelf()
+                        .As<IItemInfoRenderer>()
+                        .SingleInstance();
+
+                    //Filters
+                    builder.RegisterAssemblyTypes(dataAccess)
+                        .Where(t => t.Name.EndsWith("Filter"))
+                        .AsSelf()
+                        .As<IFilter>()
+                        .Where(c => c.GetInterface("IGenericFilter") == null)
+                        .SingleInstance();
+
+                    builder
+                        .RegisterType(typeof(GenericHasSourceFilter))
+                        .AsSelf();
+
+                    builder
+                        .RegisterType(typeof(GenericHasSourceCategoryFilter))
+                        .AsSelf();
+
+                    builder
+                        .RegisterType(typeof(GenericHasUseFilter))
+                        .AsSelf();
+
+                    builder
+                        .RegisterType(typeof(GenericHasUseCategoryFilter))
+                        .AsSelf();
+
+                    builder
+                        .RegisterType(typeof(GenericBooleanFilter))
+                        .AsSelf();
                 });
 
             hostBuilder.ConfigureContainer<ContainerBuilder>(builder =>
@@ -234,6 +289,7 @@ namespace InventoryTools
                 builder.RegisterType<AtkRetainerLarge>().As<IAtkOverlay>().As<AtkRetainerLarge>();
                 builder.RegisterType<AtkRetainerList>().As<IAtkOverlay>().As<AtkRetainerList>();
                 builder.RegisterType<AtkSelectIconString>().As<IAtkOverlay>().As<AtkSelectIconString>();
+                builder.RegisterType<AtkShop>().As<IAtkOverlay>().As<AtkShop>();
             });
 
             //Hosted service registrations
@@ -261,6 +317,7 @@ namespace InventoryTools
                 builder.RegisterType<FilterService>().As<IFilterService>().SingleInstance();
                 builder.RegisterType<Font>().As<IFont>().SingleInstance();
                 builder.RegisterType<GameInterface>().As<IGameInterface>().SingleInstance();
+                builder.RegisterType<UnlockTrackerService>().As<IUnlockTrackerService>().SingleInstance();
                 builder.RegisterType<GameUiManager>().As<IGameUiManager>().SingleInstance();
                 builder.RegisterType<HotkeyService>().As<IHotkeyService>().SingleInstance();
                 builder.RegisterType<InventoryMonitor>().As<IInventoryMonitor>().SingleInstance();
@@ -278,9 +335,20 @@ namespace InventoryTools
                 builder.RegisterType<ListCategoryService>().SingleInstance();
                 builder.RegisterType<Logger>().SingleInstance();
                 builder.RegisterType<PopupService>().SingleInstance();
+                builder.RegisterType<ExcelCache>().SingleInstance();
+                builder.RegisterType<CraftingCache>().SingleInstance();
+                builder.RegisterType<ItemInfoRenderService>().SingleInstance();
+                builder.RegisterType<ShopHighlighting>().SingleInstance();
+                builder.RegisterType<ShopTrackerService>().SingleInstance();
+                builder.Register<GameData>(c => c.Resolve<IDataManager>().GameData).SingleInstance().ExternallyOwned();
+                builder.RegisterGameSheetManager(new SheetManagerStartupOptions()
+                {
+                    Logger = _pluginLog.Logger
+                });
 
                 builder.RegisterType<PluginCommands>().SingleInstance();
-                builder.RegisterType<RightClickService>().SingleInstance();
+                builder.RegisterType<ImGuiMenuService>().SingleInstance();
+                builder.RegisterType<ImGuiTooltipService>().SingleInstance();
                 builder.RegisterType<TryOn>().SingleInstance();
                 builder.RegisterType<TetrisGame>().SingleInstance();
                 builder.RegisterType<WotsitIpc>().As<IWotsitIpc>().SingleInstance();
@@ -381,16 +449,7 @@ namespace InventoryTools
                         return genericWindow;
                     };
                 });
-                builder.Register<Func<SettingCategory, SettingPage>>(c =>
-                {
-                    var context = c.Resolve<IComponentContext>();
-                    return settingCategory =>
-                    {
-                        var settingPage = (SettingPage)context.Resolve(typeof(SettingPage));
-                        settingPage.Initialize(settingCategory);
-                        return settingPage;
-                    };
-                });
+
                 builder.Register<Func<Type, uint, UintWindow>>(c =>
                 {
                     var context = c.Resolve<IComponentContext>();
@@ -450,6 +509,31 @@ namespace InventoryTools
                         return filter;
                     };
                 });
+
+                builder.Register<Func<ItemInfoType, GenericHasSourceFilter>>(c =>
+                {
+                    var context = c.Resolve<IComponentContext>();
+                    return type => context.Resolve<GenericHasSourceFilter>(new NamedParameter("itemType", type));
+                });
+
+                builder.Register<Func<ItemInfoType, GenericHasUseFilter>>(c =>
+                {
+                    var context = c.Resolve<IComponentContext>();
+                    return type => context.Resolve<GenericHasUseFilter>(new NamedParameter("itemType", type));
+                });
+
+                builder.Register<Func<ItemInfoRenderCategory, GenericHasSourceCategoryFilter>>(c =>
+                {
+                    var context = c.Resolve<IComponentContext>();
+                    return renderCategory => context.Resolve<GenericHasSourceCategoryFilter>(new NamedParameter("renderCategory", renderCategory));
+                });
+
+                builder.Register<Func<ItemInfoRenderCategory, GenericHasUseCategoryFilter>>(c =>
+                {
+                    var context = c.Resolve<IComponentContext>();
+                    return renderCategory => context.Resolve<GenericHasUseCategoryFilter>(new NamedParameter("renderCategory", renderCategory));
+                });
+
                 builder.Register<Func<int, IBackgroundTaskQueue>>(c =>
                 {
                     return capacity =>
@@ -468,6 +552,7 @@ namespace InventoryTools
 
         public override void ConfigureServices(IServiceCollection serviceCollection)
         {
+
 
         }
 

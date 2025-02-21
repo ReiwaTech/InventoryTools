@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Numerics;
+using AllaganLib.GameSheets.Sheets.Rows;
 using CriticalCommonLib.Services.Mediator;
+
 using FFXIVClientStructs.FFXIV.Client.Game;
 using InventoryTools.Logic;
+using Lumina.Excel.Sheets;
 
 namespace InventoryTools.Mediator;
 
@@ -29,8 +33,15 @@ public record ListUpdatedMessage(FilterConfiguration FilterConfiguration) : Mess
 public record RequestListUpdateMessage(FilterConfiguration FilterConfiguration) : MessageBase;
 public record TeamCraftDataImported(List<(uint, uint)> listData) : MessageBase;
 public record AddToCraftListMessage(string FilterKey, uint ItemId, uint Quantity, InventoryItem.ItemFlags Flags) : MessageBase;
+public record AddToCuratedListMessage(string FilterKey, uint ItemId, uint Quantity, InventoryItem.ItemFlags Flags) : MessageBase;
 public record AddToNewCraftListMessage(uint ItemId, uint Quantity, InventoryItem.ItemFlags Flags, bool IsEphemeral) : MessageBase;
+public record AddToNewCuratedListMessage(uint ItemId, uint Quantity, InventoryItem.ItemFlags Flags) : MessageBase;
 public record FocusListMessage(Type windowType, FilterConfiguration FilterConfiguration) : MessageBase;
 public record RequestTeleportMessage(uint aetheryteId) : MessageBase;
+public record RequestTeleportToTerritoryMessage(uint territoryTypeId, Vector2 mapCoordinates) : MessageBase;
+public record RequestTeleportToMapMessage(uint mapId, Vector2 mapCoordinates) : MessageBase;
+public record RequestTeleportToFishingSpotRowMessage(FishingSpotRow fishingSpot) : MessageBase;
+public record RequestTeleportToSpearFishingSpotRowMessage(SpearfishingNotebookRow spearfishingNotebook) : MessageBase;
+public record RequestTeleportToGatheringPointRowMessage(GatheringPointRow gatheringPoint) : MessageBase;
 public record OverlaysRequestRefreshMessage() : MessageBase;
 public record ItemSearchRequestedMessage(uint ItemId, InventoryItem.ItemFlags Flags) : MessageBase;

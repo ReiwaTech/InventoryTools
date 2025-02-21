@@ -1,5 +1,6 @@
+using AllaganLib.GameSheets.Sheets.Rows;
 using CriticalCommonLib.Models;
-using CriticalCommonLib.Sheets;
+
 using InventoryTools.Logic.Filters.Abstract;
 using InventoryTools.Services;
 using Microsoft.Extensions.Logging;
@@ -19,18 +20,18 @@ public class FavouritesFilter : BooleanFilter
         var currentValue = CurrentValue(configuration);
         if (currentValue != null)
         {
-            return currentValue.Value && _configuration.IsFavouriteItem(item.ItemId);
+            return currentValue.Value && _configuration.IsFavouriteItem(item.ItemId) || !currentValue.Value && !_configuration.IsFavouriteItem(item.ItemId);
         }
 
         return null;
     }
 
-    public override bool? FilterItem(FilterConfiguration configuration, ItemEx item)
+    public override bool? FilterItem(FilterConfiguration configuration, ItemRow item)
     {
         var currentValue = CurrentValue(configuration);
         if (currentValue != null)
         {
-            return currentValue.Value && _configuration.IsFavouriteItem(item.RowId);
+            return currentValue.Value && _configuration.IsFavouriteItem(item.RowId) || !currentValue.Value && !_configuration.IsFavouriteItem(item.RowId);
         }
 
         return null;

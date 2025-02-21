@@ -1,9 +1,9 @@
-using System;
 using System.Collections.Generic;
 using Dalamud.Game.ClientState.Keys;
 using InventoryTools.Hotkeys;
 using System.Linq;
 using CriticalCommonLib.Services.Mediator;
+
 using Dalamud.Plugin.Services;
 using InventoryTools.Services.Interfaces;
 using Microsoft.Extensions.Logging;
@@ -71,7 +71,7 @@ public class HotkeyService : DisposableMediatorSubscriberBase, IHotkeyService
             }
         }
     }
-    
+
     private bool HotkeyPressed(VirtualKey[] keys) {
         if (keys.Length == 1 && keys[0] == VirtualKey.NO_KEY)
         {

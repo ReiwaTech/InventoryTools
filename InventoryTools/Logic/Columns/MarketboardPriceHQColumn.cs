@@ -1,10 +1,8 @@
 using System.Collections.Generic;
-using CriticalCommonLib.Interfaces;
 using CriticalCommonLib.MarketBoard;
-using CriticalCommonLib.Models;
 using CriticalCommonLib.Services;
 using CriticalCommonLib.Services.Mediator;
-using CriticalCommonLib.Sheets;
+
 using Dalamud.Interface.Colors;
 using ImGuiNET;
 using InventoryTools.Logic.Columns.Abstract;
@@ -32,12 +30,12 @@ namespace InventoryTools.Logic.Columns
         protected readonly int Loading = -1;
         protected readonly int Untradable = -2;
         public override bool IsConfigurable => true;
-        
+
         public override void DrawEditor(ColumnConfiguration columnConfiguration, FilterConfiguration configuration)
         {
             ImGui.NewLine();
             ImGui.Separator();
-            MarketboardWorldSetting.Draw(columnConfiguration);
+            MarketboardWorldSetting.Draw(columnConfiguration, null);
         }
 
         public override List<MessageBase>? Draw(FilterConfiguration configuration,

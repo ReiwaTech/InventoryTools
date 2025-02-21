@@ -1,8 +1,9 @@
 using System.Collections.Generic;
+using AllaganLib.GameSheets.Sheets.Rows;
 using CriticalCommonLib.Crafting;
 using CriticalCommonLib.Extensions;
 using CriticalCommonLib.Models;
-using CriticalCommonLib.Sheets;
+
 using InventoryTools.Logic.Filters.Abstract;
 using InventoryTools.Services;
 using Microsoft.Extensions.Logging;
@@ -22,7 +23,7 @@ public class CraftPrecraftGroupFilter : ChoiceFilter<PrecraftGroupSetting>
         return null;
     }
 
-    public override bool? FilterItem(FilterConfiguration configuration, ItemEx item)
+    public override bool? FilterItem(FilterConfiguration configuration, ItemRow item)
     {
         return null;
     }
@@ -45,7 +46,7 @@ public class CraftPrecraftGroupFilter : ChoiceFilter<PrecraftGroupSetting>
     public override string HelpText { get; set; } =
         "How should precrafts be grouped together?";
 
-    public override FilterCategory FilterCategory { get; set; } = FilterCategory.Basic;
+    public override FilterCategory FilterCategory { get; set; } = FilterCategory.Settings;
     public override PrecraftGroupSetting DefaultValue { get; set; } = PrecraftGroupSetting.ByClass;
     public override List<PrecraftGroupSetting> GetChoices(FilterConfiguration configuration)
     {

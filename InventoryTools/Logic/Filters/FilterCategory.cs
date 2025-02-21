@@ -16,5 +16,10 @@ namespace InventoryTools.Logic.Filters
         IngredientSourcing = 11,
         ZonePreference = 12,
         WorldPricePreference = 13,
+        Sources = 14,
+        Uses = 15,
+        SourceCategories = 16,
+        UseCategories = 17,
+        Settings = 18,
     }
 }

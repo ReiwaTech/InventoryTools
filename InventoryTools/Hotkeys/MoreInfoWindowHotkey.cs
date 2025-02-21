@@ -1,6 +1,7 @@
+using AllaganLib.GameSheets.Sheets;
 using CriticalCommonLib;
-using CriticalCommonLib.Services;
 using CriticalCommonLib.Services.Mediator;
+
 using InventoryTools.Mediator;
 using InventoryTools.Ui;
 using Microsoft.Extensions.Logging;
@@ -10,11 +11,11 @@ namespace InventoryTools.Hotkeys;
 
 public class MoreInfoWindowHotkey : Hotkey
 {
-    private readonly ExcelCache _excelCache;
+    private readonly ItemSheet _itemSheet;
 
-    public MoreInfoWindowHotkey(ILogger<MoreInfoWindowHotkey> logger, MediatorService mediatorService, ExcelCache excelCache, InventoryToolsConfiguration configuration) : base(logger, mediatorService, configuration)
+    public MoreInfoWindowHotkey(ILogger<MoreInfoWindowHotkey> logger, MediatorService mediatorService, ItemSheet itemSheet, InventoryToolsConfiguration configuration) : base(logger, mediatorService, configuration)
     {
-        _excelCache = excelCache;
+        _itemSheet = itemSheet;
     }
     public override ModifiableHotkey? ModifiableHotkey => Configuration.MoreInformationHotKey;
 
@@ -23,7 +24,7 @@ public class MoreInfoWindowHotkey : Hotkey
         var id = Service.GameGui.HoveredItem;
         if (id >= 2000000 || id == 0) return false;
         id %= 500000;
-        var item = _excelCache.GetItemExSheet().GetRow((uint) id);
+        var item = _itemSheet.GetRowOrDefault((uint) id);
         if (item == null) return false;
         MediatorService.Publish(new ToggleUintWindowMessage(typeof(ItemWindow), item.RowId));
         return true;

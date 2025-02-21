@@ -4,10 +4,12 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using System.Numerics;
+using AllaganLib.GameSheets.Caches;
 using CriticalCommonLib.Models;
 using Dalamud.Configuration;
 using Dalamud.Interface.Colors;
 using InventoryTools.Attributes;
+using InventoryTools.Converters;
 using InventoryTools.Logic;
 using InventoryTools.Logic.Editors;
 using InventoryTools.Logic.Settings;
@@ -18,12 +20,12 @@ using OtterGui.Classes;
 namespace InventoryTools
 {
     [Serializable]
-    public class InventoryToolsConfiguration : IPluginConfiguration
+    public class InventoryToolsConfiguration : IPluginConfiguration, IConfigurable<bool?>, IConfigurable<int?>, IConfigurable<Enum?>, IConfigurable<Dictionary<Type, bool>>, IConfigurable<Vector4?>, IConfigurable<uint?>
     {
         [JsonIgnore]
         public bool IsDirty { get; set; }
 
-        private bool _automaticallyDownloadMarketPrices = false;
+        private bool _automaticallyDownloadMarketPrices;
         private bool _colorRetainerList = true;
 
         private bool _displayCrossCharacter = true;
@@ -38,21 +40,24 @@ namespace InventoryTools
 
         private string _highlightWhen = "When Searching";
         private bool _invertHighlighting = true;
-        private bool _invertDestinationHighlighting = false;
-        private bool _invertTabHighlighting = false;
-        private bool _highlightDestination = false;
-        private bool _highlightDestinationEmpty = false;
-        private bool _addMoreInformationContextMenu = false;
-        private bool _addToCraftListContextMenu = false;
-        private bool _addToActiveCraftListContextMenu = false;
-        private bool _itemSearchContextMenu = false;
+        private bool _invertDestinationHighlighting;
+        private bool _invertTabHighlighting;
+        private bool _highlightDestination;
+        private bool _highlightDestinationEmpty;
+        private bool _addMoreInformationContextMenu;
+        private bool _addToCraftListContextMenu;
+        private bool _addToActiveCraftListContextMenu;
+        private bool _openCraftingLogContextMenu;
+        private bool _openGatheringLogContextMenu;
+        private bool _openFishingLogContextMenu;
+        private bool _itemSearchContextMenu;
 
         private bool _isVisible;
         private int _marketRefreshTimeHours = 24;
         private int _marketSaleHistoryLimit = 7;
         private bool _showItemNumberRetainerList = true;
-        private bool _historyEnabled = false;
-        private bool _addTitleMenuButton = false;
+        private bool _historyEnabled;
+        private bool _addTitleMenuButton;
 
         private Vector4 _tabHighlightColor = new (0.007f, 0.008f,
             0.007f, 0.2f);
@@ -69,12 +74,20 @@ namespace InventoryTools
         private Dictionary<string, Vector2>? _savedWindowPositions = new();
         private List<InventoryChangeReason> _historyTrackReasons = new();
         private List<uint>? _tooltipWhitelistCategories = new();
-        private bool _tooltipWhitelistBlacklist = false;
-        private List<InventorySearchScope>? _tooltipSearchScope = null;
-        private List<InventorySearchScope>? _itemSearchScope = null;
+        private bool _tooltipWhitelistBlacklist;
+        private List<InventorySearchScope>? _tooltipSearchScope;
+        private List<InventorySearchScope>? _itemSearchScope;
         private HashSet<string>? _windowsIgnoreEscape = new HashSet<string>();
         private HashSet<uint>? _favouriteItemsList = new HashSet<uint>();
         private TooltipAmountOwnedSort _tooltipAmountOwnedSort = TooltipAmountOwnedSort.Alphabetically;
+        private Dictionary<string, bool>? _booleanSettings = new();
+        private Dictionary<string, int>? _integerSettings = new();
+        private Dictionary<string, uint>? _uintegerSettings = new();
+        private Dictionary<string, Vector4>? _vector4Settings = new();
+        private Dictionary<string, Enum>? _enumSettings = new();
+        private Dictionary<string, Dictionary<Type, bool>>? _typeDictionarySettings = new();
+        private Dictionary<ItemInfoType, TooltipSourceSetting>? _tooltipInfoSourceSetting = new();
+        private Dictionary<ItemInfoType, TooltipSourceSetting>? _tooltipInfoUseSetting = new();
 
         [JsonProperty] [DefaultValue(300)] public int CraftWindowSplitterPosition { get; set; } = 300;
 
@@ -108,6 +121,26 @@ namespace InventoryTools
             }
         }
 
+        public Dictionary<ItemInfoType, TooltipSourceSetting> TooltipInfoSourceSetting
+        {
+            get => _tooltipInfoSourceSetting ??= new();
+            set
+            {
+                _tooltipInfoSourceSetting = value;
+                IsDirty = true;
+            }
+        }
+
+        public Dictionary<ItemInfoType, TooltipSourceSetting> TooltipInfoUseSetting
+        {
+            get => _tooltipInfoUseSetting ??= new();
+            set
+            {
+                _tooltipInfoUseSetting = value;
+                IsDirty = true;
+            }
+        }
+
         public bool IsFavouriteItem(uint itemId)
         {
             return FavouriteItemsList.Contains(itemId);
@@ -137,9 +170,9 @@ namespace InventoryTools
             }
             IsDirty = true;
         }
-        
-        
-        
+
+
+
 
         public bool HistoryEnabled
         {
@@ -232,6 +265,36 @@ namespace InventoryTools
             }
         }
         [DefaultValue(false)]
+        public bool OpenCraftingLogContextMenu
+        {
+            get => _openCraftingLogContextMenu;
+            set
+            {
+                _openCraftingLogContextMenu = value;
+                IsDirty = true;
+            }
+        }
+        [DefaultValue(false)]
+        public bool OpenGatheringLogContextMenu
+        {
+            get => _openGatheringLogContextMenu;
+            set
+            {
+                _openGatheringLogContextMenu = value;
+                IsDirty = true;
+            }
+        }
+        [DefaultValue(false)]
+        public bool OpenFishingLogContextMenu
+        {
+            get => _openFishingLogContextMenu;
+            set
+            {
+                _openFishingLogContextMenu = value;
+                IsDirty = true;
+            }
+        }
+        [DefaultValue(false)]
         public bool ItemSearchContextMenu
         {
             get => _itemSearchContextMenu;
@@ -241,7 +304,7 @@ namespace InventoryTools
                 IsDirty = true;
             }
         }
-        
+
         public List<InventorySearchScope>? ItemSearchScope
         {
             get => _itemSearchScope;
@@ -285,22 +348,24 @@ namespace InventoryTools
         public bool ShowFilterTab { get; set; } = true;
         public bool SwitchFiltersAutomatically { get; set; } = true;
         public bool SwitchCraftListsAutomatically { get; set; } = true;
-        private bool _tooltipCurrentCharacter = false;
+        private bool _tooltipCurrentCharacter;
         private bool _tooltipDisplayAmountOwned = true;
-        private bool _tooltipDisplayMarketAveragePrice = false;
+        private bool _tooltipDisplayUnlock;
+        private List<ulong>? _tooltipDisplayUnlockCharacters = new();
+        private bool _tooltipDisplayMarketAveragePrice;
         private bool _tooltipDisplayMarketLowestPrice = true;
-        private bool _tooltipAddCharacterNameOwned = false;
-        private bool _tooltipDisplayRetrieveAmount = false;
+        private bool _tooltipAddCharacterNameOwned;
+        private bool _tooltipDisplayRetrieveAmount;
         private int _tooltipLocationLimit = 10;
-        private bool _tooltipDisplayHeader = false;
-        private int _tooltipHeaderLines = 0;
-        private int _tooltipFooterLines = 0;
+        private bool _tooltipDisplayHeader;
+        private int _tooltipHeaderLines;
+        private int _tooltipFooterLines;
         private TooltipLocationDisplayMode _tooltipLocationDisplayMode = TooltipLocationDisplayMode.CharacterCategoryQuantityQuality;
         private WindowLayout _craftWindowLayout =  WindowLayout.Tabs;
         private WindowLayout _filtersLayout = WindowLayout.Tabs;
-        private uint? _tooltipColor = null;
+        private uint? _tooltipColor;
         private HashSet<NotificationPopup>? _notificationsSeen = new ();
-        
+
         [Vector4Default("0.007, 0.008,0.007, 0.212")]
         public Vector4 HighlightColor
         {
@@ -311,7 +376,7 @@ namespace InventoryTools
                 IsDirty = true;
             }
         }
-        
+
         [Vector4Default("0.321, 0.239, 0.03, 1")]
         public Vector4 DestinationHighlightColor
         {
@@ -373,7 +438,7 @@ namespace InventoryTools
                 IsDirty = true;
             }
         }
-        
+
         public bool TooltipDisplayAmountOwned
         {
             get => _tooltipDisplayAmountOwned;
@@ -383,7 +448,25 @@ namespace InventoryTools
                 IsDirty = true;
             }
         }
-        
+        public bool TooltipDisplayUnlock
+        {
+            get => _tooltipDisplayUnlock;
+            set
+            {
+                _tooltipDisplayUnlock = value;
+                IsDirty = true;
+            }
+        }
+        public List<ulong>? TooltipDisplayUnlockCharacters
+        {
+            get => _tooltipDisplayUnlockCharacters;
+            set
+            {
+                _tooltipDisplayUnlockCharacters = value;
+                IsDirty = true;
+            }
+        }
+
         public bool TooltipAddCharacterNameOwned
         {
             get => _tooltipAddCharacterNameOwned;
@@ -593,7 +676,7 @@ namespace InventoryTools
                 IsDirty = true;
             }
         }
-        
+
         public bool TooltipDisplayHeader
         {
             get => _tooltipDisplayHeader;
@@ -603,7 +686,7 @@ namespace InventoryTools
                 IsDirty = true;
             }
         }
-        
+
         public HashSet<NotificationPopup> NotificationsSeen
         {
             get => _notificationsSeen ??= new HashSet<NotificationPopup>();
@@ -624,13 +707,13 @@ namespace InventoryTools
             NotificationsSeen.Add(popup);
             IsDirty = true;
         }
-        
+
         public Dictionary<ulong, HashSet<uint>> AcquiredItems
         {
             get => _acquiredItems ??= new Dictionary<ulong, HashSet<uint>>();
             set => _acquiredItems = value;
         }
-        
+
         public HashSet<string> WizardVersionsSeen
         {
             get => _wizardVersionsSeen ??= new();
@@ -640,7 +723,7 @@ namespace InventoryTools
                 IsDirty = true;
             }
         }
-        
+
         [DefaultValue(true)]
         public bool MarketBoardUseActiveWorld
         {
@@ -651,7 +734,7 @@ namespace InventoryTools
                 IsDirty = true;
             }
         }
-        
+
         [DefaultValue(true)]
         public bool MarketBoardUseHomeWorld
         {
@@ -662,7 +745,7 @@ namespace InventoryTools
                 IsDirty = true;
             }
         }
-        
+
         public List<uint> MarketBoardWorldIds
         {
             get => _marketBoardWorldIds ??= new List<uint>();
@@ -684,7 +767,7 @@ namespace InventoryTools
             WizardVersionsSeen.Add(versionNumber);
             IsDirty = true;
         }
-        
+
         [DefaultValue(true)]
         public bool ShowWizardNewFeatures
         {
@@ -695,7 +778,7 @@ namespace InventoryTools
                 IsDirty = true;
             }
         }
-        
+
         [DefaultValue(Logic.Settings.TooltipAmountOwnedSort.Alphabetically)]
         public TooltipAmountOwnedSort TooltipAmountOwnedSort
         {
@@ -706,14 +789,14 @@ namespace InventoryTools
                 IsDirty = true;
             }
         }
-        
+
 
         public string? ActiveUiFilter { get; set; } = null;
 
         public bool TetrisEnabled { get; set; } = false;
 
-        public string? ActiveBackgroundFilter { get; set; } = null;
-        
+        public string? ActiveBackgroundFilter { get; set; }
+
         public string? ActiveCraftList { get; set; } = null;
 
         public bool SaveBackgroundFilter { get; set; } = false;
@@ -723,7 +806,7 @@ namespace InventoryTools
         [DefaultValue(true)]
         private bool _showWizardNewFeatures { get; set; } = true;
 
-        private HashSet<string>? _wizardVersionsSeen { get; set; } = null;
+        private HashSet<string>? _wizardVersionsSeen { get; set; }
         public int SelectedHelpPage { get; set; }
         #if DEBUG
         public int SelectedDebugPage { get; set; }
@@ -744,7 +827,31 @@ namespace InventoryTools
             get => _moreInformationHotKey;
             set => _moreInformationHotKey = value;
         }
-        
+
+        public ModifiableHotkey? OpenCraftingLogHotKey
+        {
+            get => _openCraftingLogHotKey;
+            set => _openCraftingLogHotKey = value;
+        }
+
+        public ModifiableHotkey? OpenGatheringLogHotKey
+        {
+            get => _openGatheringLogHotKey;
+            set => _openGatheringLogHotKey = value;
+        }
+
+        public ModifiableHotkey? OpenFishingLogHotKey
+        {
+            get => _openFishingLogHotKey;
+            set => _openFishingLogHotKey = value;
+        }
+
+        public ModifiableHotkey? OpenItemLogHotKey
+        {
+            get => _openItemLogHotKey;
+            set => _openItemLogHotKey = value;
+        }
+
         public ConcurrentDictionary<string,ModifiableHotkey> Hotkeys
         {
             get
@@ -762,8 +869,12 @@ namespace InventoryTools
         }
 
         private ModifiableHotkey? _moreInformationHotKey;
+        private ModifiableHotkey? _openCraftingLogHotKey;
+        private ModifiableHotkey? _openGatheringLogHotKey;
+        private ModifiableHotkey? _openFishingLogHotKey;
+        private ModifiableHotkey? _openItemLogHotKey;
         private ConcurrentDictionary<string,ModifiableHotkey>? _hotkeys;
-        private bool _trackMobSpawns = false;
+        private bool _trackMobSpawns;
         private bool _marketBoardUseActiveWorld = true;
         private bool _marketBoardUseHomeWorld = true;
         private List<uint>? _marketBoardWorldIds;
@@ -825,6 +936,44 @@ namespace InventoryTools
 
         public LogLevel LogLevel { get; set; } = LogLevel.Information;
 
+        public Dictionary<string, bool> BooleanSettings
+        {
+            get => _booleanSettings ??= new Dictionary<string, bool>();
+            set => _booleanSettings = value;
+        }
+
+        public Dictionary<string, int> IntegerSettings
+        {
+            get => _integerSettings ??= new Dictionary<string, int>();
+            set => _integerSettings = value;
+        }
+
+        public Dictionary<string, uint> UIntegerSettings
+        {
+            get => _uintegerSettings ??= new Dictionary<string, uint>();
+            set => _uintegerSettings = value;
+        }
+
+        [JsonConverter(typeof(EnumDictionaryConverter))]
+        public Dictionary<string, Enum> EnumSettings
+        {
+            get => _enumSettings ??= new Dictionary<string, Enum>();
+            set => _enumSettings = value;
+        }
+
+        [JsonConverter(typeof(TypeDictionaryConverter))]
+        public Dictionary<string, Dictionary<Type, bool>> TypeDictionarySettings
+        {
+            get => _typeDictionarySettings ??= new Dictionary<string, Dictionary<Type, bool>>();
+            set => _typeDictionarySettings = value;
+        }
+
+        public Dictionary<string, Vector4> Vector4Settings
+        {
+            get => _vector4Settings ??= new Dictionary<string, Vector4>();
+            set => _vector4Settings = value;
+        }
+
 
         //Configuration Helpers
 
@@ -845,7 +994,7 @@ namespace InventoryTools
                 ActiveBackgroundFilter = null;
             }
         }
-        
+
         public bool HasDefaultCraftList()
         {
             if (FilterConfigurations.Any(c => c.FilterType == FilterType.CraftFilter && c.CraftListDefault))
@@ -867,5 +1016,118 @@ namespace InventoryTools
         }
 
 
+        public bool? Get(string key, bool? defaultValue)
+        {
+            return this.BooleanSettings.TryGetValue(key, out var value) ? value : defaultValue;
+        }
+
+        public void Set(string key, int? newValue)
+        {
+            if (newValue == null)
+            {
+                this.IntegerSettings.Remove(key);
+            }
+            else
+            {
+                this.IntegerSettings[key] = newValue.Value;
+            }
+
+            this.IsDirty = true;
+        }
+
+        public void Set(string key, bool? newValue)
+        {
+            if (newValue == null)
+            {
+                this.BooleanSettings.Remove(key);
+            }
+            else
+            {
+                this.BooleanSettings[key] = newValue.Value;
+            }
+
+            this.IsDirty = true;
+        }
+
+        public int? Get(string key, int? defaultValue)
+        {
+            return this.IntegerSettings.TryGetValue(key, out var value) ? value : defaultValue;
+        }
+
+        public Enum? Get(string key, Enum? defaultValue)
+        {
+            return this.EnumSettings.GetValueOrDefault(key);
+        }
+
+        public void Set(string key, Enum? newValue)
+        {
+            if (newValue == null)
+            {
+                this.EnumSettings.Remove(key);
+            }
+            else
+            {
+                this.EnumSettings[key] = newValue;
+            }
+
+            this.IsDirty = true;
+        }
+
+        public Dictionary<Type, bool>? Get(string key, Dictionary<Type, bool>? defaultValue)
+        {
+            return this.TypeDictionarySettings.GetValueOrDefault(key);
+        }
+
+        public void Set(string key, Dictionary<Type, bool>? newValue)
+        {
+            if (newValue == null)
+            {
+                this.TypeDictionarySettings.Remove(key);
+            }
+            else
+            {
+                this.TypeDictionarySettings[key] = newValue;
+            }
+
+            this.IsDirty = true;
+        }
+
+        public Vector4? Get(string key, Vector4? defaultValue)
+        {
+            return this.Vector4Settings.TryGetValue(key, out var value) ? value : defaultValue;
+        }
+
+        public void Set(string key, Vector4? newValue)
+        {
+            if (newValue == null)
+            {
+                this.Vector4Settings.Remove(key);
+            }
+            else
+            {
+                this.Vector4Settings[key] = newValue.Value;
+            }
+
+            this.IsDirty = true;
+        }
+
+        public uint? Get(string key, uint? defaultValue)
+        {
+            return this.UIntegerSettings.TryGetValue(key, out var value) ? value : defaultValue;
+        }
+
+        public void Set(string key, uint? newValue)
+        {
+            if (newValue == null)
+            {
+                this.UIntegerSettings.Remove(key);
+            }
+            else
+            {
+                this.UIntegerSettings[key] = newValue.Value;
+            }
+
+            this.IsDirty = true;
+        }
     }
 }

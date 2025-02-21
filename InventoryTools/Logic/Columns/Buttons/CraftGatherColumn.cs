@@ -1,21 +1,26 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using AllaganLib.GameSheets.Caches;
+using AllaganLib.GameSheets.ItemSources;
+using AllaganLib.GameSheets.Model;
+using AllaganLib.GameSheets.Sheets;
+using AllaganLib.GameSheets.Sheets.Rows;
+using AllaganLib.Shared.Time;
 using CriticalCommonLib;
 using CriticalCommonLib.Crafting;
 using CriticalCommonLib.Extensions;
-using CriticalCommonLib.Interfaces;
-using CriticalCommonLib.Models;
 using CriticalCommonLib.Services;
 using CriticalCommonLib.Services.Mediator;
-using CriticalCommonLib.Sheets;
-using CriticalCommonLib.Time;
+
 using Dalamud.Interface.Colors;
+using Dalamud.Interface.Textures;
 using Dalamud.Interface.Utility.Raii;
 using ImGuiNET;
 using InventoryTools.Logic.Columns.Abstract;
 using InventoryTools.Mediator;
 using InventoryTools.Services;
+using Lumina.Extensions;
 using Microsoft.Extensions.Logging;
 using OtterGui;
 
@@ -25,11 +30,13 @@ namespace InventoryTools.Logic.Columns.Buttons
     {
         private readonly IChatUtilities _chatUtilities;
         private readonly ISeTime _seTime;
+        private readonly MapSheet _mapSheet;
 
-        public CraftGatherColumn(ILogger<CraftGatherColumn> logger, ImGuiService imGuiService, IChatUtilities chatUtilities, ISeTime seTime) : base(logger, imGuiService)
+        public CraftGatherColumn(ILogger<CraftGatherColumn> logger, ImGuiService imGuiService, IChatUtilities chatUtilities, ISeTime seTime, MapSheet mapSheet) : base(logger, imGuiService)
         {
             _chatUtilities = chatUtilities;
             _seTime = seTime;
+            _mapSheet = mapSheet;
         }
         public override ColumnCategory ColumnCategory => ColumnCategory.Buttons;
 
@@ -39,13 +46,14 @@ namespace InventoryTools.Logic.Columns.Buttons
             {
                 return true;
             }
-            return searchResult.Item.CanBeGathered || searchResult.Item.ObtainedFishing;
+            return searchResult.Item.ObtainedGathering || searchResult.Item.ObtainedFishing;
         }
 
-        List<(IShop shop, ENpc? npc, ILocation? location)> GetLocations(ItemEx item)
+        List<(IShop shop, ENpcBaseRow? npc, ILocation? location)> GetLocations(ItemRow item)
         {
-            var vendors = new List<(IShop shop, ENpc? npc, ILocation? location)>();
-            foreach (var vendor in item.Vendors)
+            var vendors = new List<(IShop shop, ENpcBaseRow? npc, ILocation? location)>();
+            var shops = item.GetSourcesByCategory<ItemShopSource>(ItemInfoCategory.Shop).Select(c => c.Shop);
+            foreach (var vendor in shops)
             {
                 if (vendor.Name == "")
                 {
@@ -77,8 +85,8 @@ namespace InventoryTools.Logic.Columns.Buttons
             vendors = vendors.OrderByDescending(c => c.npc != null && c.location != null).ToList();
             return vendors;
         }
-        
-        void DrawSupplierRow(ItemEx item,(IShop shop, ENpc? npc, ILocation? location) tuple, List<MessageBase> messages)
+
+        void DrawSupplierRow(ItemRow item,(IShop shop, ENpcBaseRow? npc, ILocation? location) tuple, List<MessageBase> messages)
         {
             ImGui.TableNextColumn();
             if (ImGui.TableGetColumnFlags().HasFlag(ImGuiTableColumnFlags.IsEnabled))
@@ -91,7 +99,7 @@ namespace InventoryTools.Logic.Columns.Buttons
                 ImGui.TableNextColumn();
                 if (ImGui.TableGetColumnFlags().HasFlag(ImGuiTableColumnFlags.IsEnabled))
                 {
-                    ImGui.TextWrapped(tuple.npc?.Resident?.Singular ?? "");
+                    ImGui.TextWrapped(tuple.npc?.Resident.Value.Singular.ExtractText() ?? "");
                 }
             }
             if (tuple.npc != null && tuple.location != null)
@@ -106,13 +114,13 @@ namespace InventoryTools.Logic.Columns.Buttons
                 ImGui.TableNextColumn();
                 if (ImGui.TableGetColumnFlags().HasFlag(ImGuiTableColumnFlags.IsEnabled))
                 {
-                    if (ImGui.Button("Teleport##" + tuple.shop.RowId + "_" + tuple.npc.Key + "_" +
-                                     tuple.location.MapEx.Row))
+                    if (ImGui.Button("Teleport##" + tuple.shop.RowId + "_" + tuple.npc.RowId + "_" +
+                                     tuple.location.Map.RowId))
                     {
                         var nearestAetheryte = tuple.location.GetNearestAetheryte();
                         if (nearestAetheryte != null)
                         {
-                            messages.Add(new RequestTeleportMessage(nearestAetheryte.RowId));
+                            messages.Add(new RequestTeleportMessage(nearestAetheryte.Value.RowId));
                         }
 
                         _chatUtilities.PrintFullMapLink(tuple.location, item.NameString);
@@ -133,7 +141,7 @@ namespace InventoryTools.Logic.Columns.Buttons
         {
             ImGui.TableNextColumn();
             if (!ImGui.TableGetColumnFlags().HasFlag(ImGuiTableColumnFlags.IsEnabled)) return null;
-            
+
             var messages = new List<MessageBase>();
             if (CurrentValue(columnConfiguration, searchResult) == true)
             {
@@ -150,23 +158,27 @@ namespace InventoryTools.Logic.Columns.Buttons
                     hasVendors = DrawVendorButton(searchResult, rowIndex, messages, hasGather);
                 }
 
-                var gatheringUptime = searchResult.Item.GetGatheringUptime();
-                if (gatheringUptime != null)
+                var gatheringUptimes = searchResult.Item.GatheringUpTimes;
+                if (gatheringUptimes.Count != 0)
                 {
+                    var firstUptime = gatheringUptimes.Select(c => c.NextUptime(_seTime.ServerTime)).Where(c => !c.Equals(TimeInterval.Always) && !c.Equals(TimeInterval.Invalid) && !c.Equals(TimeInterval.Never)).OrderBy(c => c).FirstOrNull();
+
+                    if (firstUptime == null)
+                    {
+                        return messages;
+                    }
+
                     if (hasGather || hasVendors)
                     {
                         ImGui.SameLine();
                     }
-                    var nextUptime = gatheringUptime.Value.NextUptime(_seTime.ServerTime);
-                    if (nextUptime.Equals(TimeInterval.Always)
-                        || nextUptime.Equals(TimeInterval.Invalid)
-                        || nextUptime.Equals(TimeInterval.Never)) return null;
-                    if (nextUptime.Start > TimeStamp.UtcNow)
+
+                    if (firstUptime.Value.Start > TimeStamp.UtcNow)
                     {
                         using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.DalamudRed))
                         {
                             ImGui.Text(" (Up in " +
-                                       TimeInterval.DurationString(nextUptime.Start, TimeStamp.UtcNow,
+                                       TimeInterval.DurationString(firstUptime.Value.Start, TimeStamp.UtcNow,
                                            true) + ")");
                         }
                     }
@@ -175,8 +187,47 @@ namespace InventoryTools.Logic.Columns.Buttons
                         using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.HealerGreen))
                         {
                             ImGui.Text(" (Up for " +
-                                       TimeInterval.DurationString(nextUptime.End, TimeStamp.UtcNow,
+                                       TimeInterval.DurationString(firstUptime.Value.End, TimeStamp.UtcNow,
                                            true) + ")");
+                        }
+                    }
+
+                    ImGui.SameLine();
+                    var wrap = ImGuiService.TextureProvider.GetFromGameIcon(new GameIconLookup(66317)).GetWrapOrEmpty();
+                    ImGui.Image(wrap.ImGuiHandle, new(16, 16));
+
+                    if (ImGui.IsItemHovered())
+                    {
+                        using (var tooltip = ImRaii.Tooltip())
+                        {
+                            if (tooltip.Success)
+                            {
+                                var pointsWithUpTimes = searchResult.Item.GatheringPoints.Where(c => c.GatheringPointTransient.GetGatheringUptime() != null).DistinctBy(c => c.GatheringPointTransient.GetGatheringUptime());
+                                foreach (var nextUptime in pointsWithUpTimes.Select(row => (row, row.GatheringPointTransient.GetGatheringUptime()!.Value.NextUptime(_seTime.ServerTime))).Where(c => !c.Item2.Equals(TimeInterval.Always) && !c.Item2.Equals(TimeInterval.Invalid) && !c.Item2.Equals(TimeInterval.Never)).OrderBy(c => c.Item2))
+                                {
+                                    var map = _mapSheet.GetRow(nextUptime.row.Base.TerritoryType.Value.Map.RowId);
+                                    ImGui.Text(map.FormattedName + ": ");
+                                    ImGui.SameLine();
+                                    if (nextUptime.Item2.Start > TimeStamp.UtcNow)
+                                    {
+                                        using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.DalamudRed))
+                                        {
+                                            ImGui.Text( " (Up in " +
+                                                       TimeInterval.DurationString(nextUptime.Item2.Start, TimeStamp.UtcNow,
+                                                           true) + ")");
+                                        }
+                                    }
+                                    else
+                                    {
+                                        using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.HealerGreen))
+                                        {
+                                            ImGui.Text(" (Up for " +
+                                                       TimeInterval.DurationString(nextUptime.Item2.End, TimeStamp.UtcNow,
+                                                           true) + ")");
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -194,7 +245,7 @@ namespace InventoryTools.Logic.Columns.Buttons
                 }
                 if (ImGui.Button("Gather##Gather" + rowIndex))
                 {
-                    Service.Commands.ProcessCommand("/gather " + searchResult.Item.Name);
+                    Service.Commands.ProcessCommand("/gather " + searchResult.Item.Base.Name.ExtractText());
                 }
 
                 return true;
@@ -207,7 +258,7 @@ namespace InventoryTools.Logic.Columns.Buttons
                 }
                 if (ImGui.Button("Gather##Gather" + rowIndex))
                 {
-                    Service.Commands.ProcessCommand("/gatherfish " + searchResult.Item.Name);
+                    Service.Commands.ProcessCommand("/gatherfish " + searchResult.Item.Base.Name.ExtractText());
                 }
                 return true;
             }
@@ -217,7 +268,9 @@ namespace InventoryTools.Logic.Columns.Buttons
 
         private bool DrawVendorButton(SearchResult item, int rowIndex, List<MessageBase> messages, bool needsSameLine)
         {
-            if (item.Item.Vendors.Any())
+            var shops = item.Item.GetSourcesByCategory<ItemShopSource>(ItemInfoCategory.Shop).Select(c => c.Shop);
+
+            if (shops.Any())
             {
                 if (needsSameLine)
                 {
@@ -228,16 +281,16 @@ namespace InventoryTools.Logic.Columns.Buttons
                 {
                     uint? umapId = item.CraftItem?.MapId ?? null;
                     int mapId = umapId == null ? -1 : (int)umapId;
-                    var vendor = GetLocations(item.Item).OrderBy(c => (c.location?.MapEx.Row ?? 0) == mapId ? 0 : 1).FirstOrDefault();
+                    var vendor = GetLocations(item.Item).OrderBy(c => (c.location?.Map.RowId ?? 0) == mapId ? 0 : 1).FirstOrDefault();
                     if (vendor.location != null)
                     {
                         var nearestAetheryte = vendor.location.GetNearestAetheryte();
                         if (nearestAetheryte != null)
                         {
-                            messages.Add(new RequestTeleportMessage(nearestAetheryte.RowId));
+                            messages.Add(new RequestTeleportMessage(nearestAetheryte.Value.RowId));
                         }
 
-                        var npcName = vendor.npc?.Resident?.Singular.AsReadOnly().ToString() ?? null;
+                        var npcName = vendor.npc?.Resident.Value.Singular.ExtractText() ?? null;
 
                         List<string?> stringParts = new()
                         {
@@ -248,7 +301,7 @@ namespace InventoryTools.Logic.Columns.Buttons
                         };
 
                         var mapLinkText = String.Join("", stringParts.Where(c => c != null).Select(c => c!).ToList());
-                        
+
                         _chatUtilities.PrintFullMapLink(vendor.location, mapLinkText);
                     }
                     else

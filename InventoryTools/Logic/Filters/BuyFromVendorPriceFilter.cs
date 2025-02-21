@@ -1,5 +1,8 @@
+using AllaganLib.GameSheets.Caches;
+using AllaganLib.GameSheets.Sheets.Rows;
+using AllaganLib.Shared.Extensions;
 using CriticalCommonLib.Models;
-using CriticalCommonLib.Sheets;
+
 using InventoryTools.Extensions;
 using InventoryTools.Logic.Filters.Abstract;
 using InventoryTools.Services;
@@ -19,7 +22,7 @@ namespace InventoryTools.Logic.Filters
             var currentValue = CurrentValue(configuration);
             if (!string.IsNullOrEmpty(currentValue))
             {
-                if (!item.Item.ObtainedGil)
+                if (!item.Item.HasSourcesByType(ItemInfoType.GilShop, ItemInfoType.CalamitySalvagerShop))
                 {
                     return false;
                 }
@@ -32,16 +35,16 @@ namespace InventoryTools.Logic.Filters
             return true;
         }
 
-        public override bool? FilterItem(FilterConfiguration configuration, ItemEx item)
+        public override bool? FilterItem(FilterConfiguration configuration, ItemRow item)
         {
             var currentValue = CurrentValue(configuration);
             if (!string.IsNullOrEmpty(currentValue))
             {
-                if (!item.ObtainedGil)
+                if (!item.HasSourcesByType(ItemInfoType.GilShop, ItemInfoType.CalamitySalvagerShop))
                 {
                     return false;
                 }
-                if (!item.PriceMid.PassesFilter(currentValue.ToLower()))
+                if (!item.Base.PriceMid.PassesFilter(currentValue.ToLower()))
                 {
                     return false;
                 }

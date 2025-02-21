@@ -4,13 +4,13 @@ using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using DalaMock.Shared.Interfaces;
-using Dalamud.Interface.Internal;
+using Dalamud.Interface;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Common.Math;
 using ImGuiNET;
 using InventoryTools.Extensions;
-using InventoryTools.Services.Interfaces;
+using InventoryTools.Logic;
 
 namespace InventoryTools.Services;
 
@@ -30,13 +30,13 @@ public class ImGuiService
 {
     private readonly IDalamudPluginInterface pluginInterface;
     public ITextureProvider TextureProvider { get; }
-    public RightClickService RightClickService { get; }
+    public ImGuiMenuService ImGuiMenuService { get; }
 
-    public ImGuiService(ITextureProvider textureProvider, RightClickService rightClickService, IDalamudPluginInterface pluginInterface)
+    public ImGuiService(ITextureProvider textureProvider, ImGuiMenuService imGuiMenuService, IDalamudPluginInterface pluginInterface)
     {
         this.pluginInterface = pluginInterface;
         TextureProvider = textureProvider;
-        RightClickService = rightClickService;
+        ImGuiMenuService = imGuiMenuService;
     }
 
 
@@ -56,9 +56,55 @@ public class ImGuiService
         Name = "CheckBoxA_hr1", Size = new Vector2(16, 16), Uv0 = new Vector2(0f, 0f), Uv1 = new Vector2(0.5f, 1f)
     };
 
+    public static bool DrawIconButton(
+        IFont font,
+        FontAwesomeIcon icon,
+        ref float currentCursorX,
+        string? tooltip = null,
+        bool reverseCursor = false,
+        Vector4? textColor = null)
+    {
+        var success = false;
+        var iconString = icon.ToIconString();
+
+        using var pushFont = ImRaii.PushFont(font.IconFont);
+        using var pushColor = ImRaii.PushColor(ImGuiCol.Text, textColor ?? new Vector4(1, 1, 1, 1), textColor != null);
+        var globalScale = ImGui.GetIO().FontGlobalScale;
+        var iconSize = ImGui.CalcTextSize(iconString);
+        var framePadding = ImGui.GetStyle().FramePadding * globalScale;
+
+        var buttonSize = iconSize + (framePadding * 2);
+
+        if (reverseCursor)
+        {
+            currentCursorX -= buttonSize.X + ImGui.GetStyle().ItemSpacing.X;
+        }
+
+        ImGui.SetCursorPosX(currentCursorX);
+
+        if (ImGui.Button(iconString, buttonSize))
+        {
+            success = true;
+        }
+
+        pushColor.Pop();
+        pushFont.Pop();
+
+        if (ImGui.IsItemHovered() && !string.IsNullOrEmpty(tooltip))
+        {
+            using var tooltipScope = ImRaii.Tooltip();
+            if (tooltipScope)
+            {
+                ImGui.Text(tooltip);
+            }
+        }
+
+        return success;
+    }
+
     public IDalamudTextureWrap GetIconTexture(int iconId, bool isHq = false)
     {
-        return TextureProvider.GetFromGameIcon(new GameIconLookup((uint)iconId, isHq)).GetWrapOrEmpty();
+        return TextureProvider.TryGetFromGameIcon(new GameIconLookup((uint)iconId, isHq), out var texture) ? texture.GetWrapOrEmpty() : TextureProvider.GetFromGameIcon(new GameIconLookup(60074, isHq)).GetWrapOrEmpty();
     }
 
     public IDalamudTextureWrap GetIconTexture(uint iconId)
@@ -100,7 +146,7 @@ public class ImGuiService
         }
     }
 
-    public void DrawIcon(ushort icon, Vector2 size, bool hqIcon = false)
+    public void DrawIcon(uint icon, Vector2 size, bool hqIcon = false)
     {
         if (icon <= 65103)
         {
@@ -217,7 +263,8 @@ public class ImGuiService
     public void WrapTableColumnElements<T>(string windowId, IEnumerable<T> items, float rowSize,
         Func<T, bool> drawElement)
     {
-        using (var wrapTableChild = ImRaii.Child(windowId,
+        using var pushId = ImRaii.PushId(windowId);
+        using (var wrapTableChild = ImRaii.Child("ScrollBox",
                    new Vector2(ImGui.GetContentRegionAvail().X,
                        rowSize + ImGui.GetStyle().CellPadding.Y + ImGui.GetStyle().ItemSpacing.Y), false))
         {

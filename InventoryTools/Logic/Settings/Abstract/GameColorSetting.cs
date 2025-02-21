@@ -4,20 +4,24 @@ using System.Linq;
 using System.Numerics;
 using CriticalCommonLib;
 using CriticalCommonLib.Comparer;
-using CriticalCommonLib.Services;
 using Dalamud.Interface.Colors;
+using Dalamud.Interface.Utility.Raii;
 using ImGuiNET;
 using InventoryTools.Services;
-using Lumina.Excel.GeneratedSheets;
+using Lumina.Excel;
+using Lumina.Excel.Sheets;
 using Microsoft.Extensions.Logging;
 
 namespace InventoryTools.Logic.Settings.Abstract
 {
     public abstract class GameColorSetting : Setting<uint?>
     {
-        public GameColorSetting(ILogger logger, ImGuiService imGuiService, ExcelCache excelCache) : base(logger, imGuiService)
+        private readonly ExcelSheet<UIColor> _uiColorSheet;
+
+        public GameColorSetting(ILogger logger, ImGuiService imGuiService, ExcelSheet<UIColor> uiColorSheet) : base(logger, imGuiService)
         {
-            var list = new List<UIColor>(excelCache.GetUIColorSheet().Distinct(new UIColorComparer()));
+            _uiColorSheet = uiColorSheet;
+            var list = new List<UIColor>(_uiColorSheet.Distinct(new UIColorComparer()));
             list.Sort((a, b) =>
             {
                 var colorA = Utils.ConvertUiColorToColor(a);
@@ -44,31 +48,8 @@ namespace InventoryTools.Logic.Settings.Abstract
         }
         private readonly Dictionary<uint, UIColor> uiColors;
 
-
-        public override void Draw(InventoryToolsConfiguration configuration)
+        public void DrawColorPopup(InventoryToolsConfiguration configuration, uint? currentColor)
         {
-            var value = CurrentValue(configuration);
-            ImGui.SetNextItemWidth(LabelSize);
-            if (ColourModified && HasValueSet(configuration))
-            {
-                ImGui.PushStyleColor(ImGuiCol.Text,ImGuiColors.HealerGreen);
-                ImGui.LabelText("##" + Key + "Label", Name);
-                ImGui.PopStyleColor();
-            }
-            else
-            {
-                ImGui.LabelText("##" + Key + "Label", Name);
-            }
-            ImGui.SameLine();
-            var currentColour = new Vector4(255, 255, 255, 255);
-            if (value != null && uiColors.ContainsKey(value.Value))
-            {
-                currentColour = Utils.ConvertUiColorToColor(uiColors[value.Value]);
-            }
-            if (ImGui.ColorButton("##" + Key + "CurrentVal", currentColour))
-            {
-            }
-
             var index = 0;
             foreach(var uiColor in uiColors)
             {
@@ -81,13 +62,14 @@ namespace InventoryTools.Logic.Settings.Abstract
                 var color = Utils.ConvertUiColorToColor(z);
                 var id = z.RowId.ToString();
                 var imGuiColorEditFlags = ImGuiColorEditFlags.NoBorder;
-                if (value == z.RowId)
+                if (currentColor == z.RowId)
                 {
                     imGuiColorEditFlags = ImGuiColorEditFlags.None;
                 }
 
                 if (ImGui.ColorButton(id, color, imGuiColorEditFlags))
                 {
+                    ImGui.CloseCurrentPopup();
                     UpdateFilterConfiguration(configuration, id == "" ? null : UInt32.Parse(id));
                 }
                 index++;
@@ -95,12 +77,80 @@ namespace InventoryTools.Logic.Settings.Abstract
                 {
                     ImGui.SameLine();
                 }
+            }
+        }
 
-                
+        public override void Draw(InventoryToolsConfiguration configuration, string? customName, bool? disableReset,
+            bool? disableColouring)
+        {
+            var value = CurrentValue(configuration);
+            if (disableColouring != true && HasValueSet(configuration))
+            {
+                ImGui.PushStyleColor(ImGuiCol.Text,ImGuiColors.HealerGreen);
+                ImGui.LabelText("##" + Key + "Label", customName ?? Name);
+                ImGui.PopStyleColor();
+            }
+            else
+            {
+                ImGui.LabelText("##" + Key + "Label", customName ?? Name);
+            }
+            var enabled = value != null;
+
+            if (ImGui.Checkbox("Enable##"+Key+"Boolean", ref enabled))
+            {
+                if (value == null)
+                {
+                    value = DefaultValue ?? uiColors.First().Key;
+                }
+                else
+                {
+                    value = null;
+                }
+
+                UpdateFilterConfiguration(configuration, value);
             }
 
+            var currentColour = new Vector4(255, 255, 255, 255);
+            if (value != null && uiColors.ContainsKey(value.Value))
+            {
+                currentColour = Utils.ConvertUiColorToColor(uiColors[value.Value]);
+            }
+            ImGui.SameLine();
+
+            using (var disabled = ImRaii.Disabled(value == null))
+            {
+                if (ImGui.ColorButton("##" + Key + "CurrentVal", currentColour))
+                {
+                }
+
+                if (ImGui.IsItemHovered())
+                {
+                    using (var tooltip = ImRaii.Tooltip())
+                    {
+                        if (tooltip)
+                        {
+                            ImGui.Text("Click to open colour selector.");
+                        }
+                    }
+                }
+            }
+
+            if (ImGui.IsItemHovered() && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+            {
+                ImGui.OpenPopup("##" + Key + "Popup");
+            }
+
+            using (var popup = ImRaii.Popup("##" + Key + "Popup"))
+            {
+                if (popup)
+                {
+                    DrawColorPopup(configuration, value);
+                }
+            }
+            ImGui.SameLine();
+
             ImGuiService.HelpMarker(HelpText, Image, ImageSize);
-            if (!HideReset && HasValueSet(configuration))
+            if (disableReset != true && HasValueSet(configuration))
             {
                 ImGui.SameLine();
                 if (ImGui.Button("Reset##" + Key + "Reset"))

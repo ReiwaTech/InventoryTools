@@ -1,5 +1,6 @@
+using AllaganLib.GameSheets.Sheets.Rows;
 using CriticalCommonLib.Services;
-using CriticalCommonLib.Sheets;
+
 using Dalamud.Plugin.Services;
 
 namespace InventoryToolsMock;
@@ -12,23 +13,9 @@ public class MockGameInterface : IGameInterface
     {
         _pluginLog = pluginLog;
     }
-    
+
     public void Dispose()
     {
-    }
-
-    public event GameInterface.AcquiredItemsUpdatedDelegate? AcquiredItemsUpdated;
-
-    public HashSet<uint> AcquiredItems
-    {
-        get
-        {
-            return new HashSet<uint>();
-        }
-        set
-        {
-            
-        }
     }
 
     public bool IsGatheringItemGathered(uint item)
@@ -49,11 +36,6 @@ public class MockGameInterface : IGameInterface
     public unsafe void OpenFishingLog(uint itemId, bool isSpearFishing)
     {
         _pluginLog.Info("Game Event: Fishing Log Opened for Item #" + itemId);
-    }
-
-    public unsafe bool HasAcquired(ItemEx item, bool debug = false)
-    {
-        return false;
     }
 
     public unsafe bool IsInArmoire(uint itemId)

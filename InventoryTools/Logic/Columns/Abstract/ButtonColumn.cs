@@ -1,8 +1,6 @@
 using System.Collections.Generic;
-using CriticalCommonLib.Crafting;
-using CriticalCommonLib.Models;
 using CriticalCommonLib.Services.Mediator;
-using CriticalCommonLib.Sheets;
+
 using ImGuiNET;
 
 namespace InventoryTools.Logic.Columns.Abstract;
@@ -94,7 +92,7 @@ public abstract class ButtonColumn : IColumn
         ImGui.TableSetupColumn(columnConfiguration.Name ?? (RenderName ?? Name), imGuiTableColumnFlags, Width, (uint)columnIndex);
     }
 
-    public virtual IFilterEvent? DrawFooterFilter(FilterConfiguration configuration, FilterTable filterTable)
+    public virtual IFilterEvent? DrawFooterFilter(ColumnConfiguration columnConfiguration, FilterTable filterTable)
     {
         return null;
     }

@@ -19,6 +19,9 @@ using Dalamud.Interface.Utility.Raii;
 using InventoryTools.Mediator;
 using InventoryTools.Services;
 using InventoryTools.Services.Interfaces;
+using Lumina.Excel;
+using Lumina.Excel.Sheets;
+using LuminaSupplemental.Excel.Services;
 using Microsoft.Extensions.Logging;
 using OtterGui.Log;
 
@@ -35,8 +38,27 @@ public class MockWindow : GenericWindow
     private readonly IOverlayService _overlayService;
     private readonly InventoryHistory _inventoryHistory;
     private readonly ExcelCache _excelCache;
+    private readonly ExcelSheet<World> _worldSheet;
 
-    public MockWindow(ILogger<MockWindow> logger, MediatorService mediator,ImGuiService imGuiService, InventoryToolsConfiguration configuration, Logger otterLogger, ICraftMonitor craftMonitor, ICharacterMonitor characterMonitor, IMobTracker mobTracker, IFileDialogManager fileDialogManager, IInventoryMonitor inventoryMonitor, IOverlayService overlayService, HostedInventoryHistory inventoryHistory, ExcelCache excelCache, string name = "Mock Tools") : base(logger, mediator, imGuiService, configuration, name)
+    public MockWindow(ILogger<MockWindow> logger,
+        MediatorService mediator,
+        ImGuiService imGuiService,
+        InventoryToolsConfiguration configuration,
+        Logger otterLogger,
+        ICraftMonitor craftMonitor,
+        ICharacterMonitor characterMonitor,
+        IMobTracker mobTracker,
+        IFileDialogManager fileDialogManager,
+        IInventoryMonitor inventoryMonitor,
+        IOverlayService overlayService,
+        HostedInventoryHistory inventoryHistory,
+        ExcelCache excelCache,
+        ExcelSheet<World> worldSheet,
+        string name = "Mock Tools") : base(logger,
+        mediator,
+        imGuiService,
+        configuration,
+        name)
     {
         _otterLogger = otterLogger;
         _craftMonitor = craftMonitor;
@@ -47,6 +69,7 @@ public class MockWindow : GenericWindow
         _overlayService = overlayService;
         _inventoryHistory = inventoryHistory;
         _excelCache = excelCache;
+        _worldSheet = worldSheet;
     }
     private List<InventoryItem> _items;
 
@@ -55,8 +78,8 @@ public class MockWindow : GenericWindow
         WindowName = "Mock Tools";
         Key = "mock";
         _rng = new Random();
-        _activeWorldPicker = new WorldPicker(_excelCache.GetWorldSheet().Where(c => c.IsPublic).ToList(), false, _otterLogger);
-        _homeWorldPicker = new WorldPicker(_excelCache.GetWorldSheet().Where(c => c.IsPublic).ToList(), false, _otterLogger);
+        _activeWorldPicker = new WorldPicker(_worldSheet.Where(c => c.IsPublic).ToList(), false, _otterLogger);
+        _homeWorldPicker = new WorldPicker(_worldSheet.Where(c => c.IsPublic).ToList(), false, _otterLogger);
     }
 
 
@@ -240,6 +263,10 @@ public class MockWindow : GenericWindow
                 {
                     if (combo.Success)
                     {
+                        if(ImGui.Selectable("None", _characterMonitor.ActiveRetainerId == 0))
+                        {
+                            _characterMonitor.OverrideActiveRetainer(0);
+                        }
                         foreach (var character in _characterMonitor.GetRetainerCharacters())
                         {
                             if (ImGui.Selectable(character.Value.FormattedName + "##" + character.Key, _characterMonitor.ActiveRetainerId == character.Key))
@@ -256,7 +283,7 @@ public class MockWindow : GenericWindow
                     int homeWorldId = (int)(activeCharacter.WorldId);
 
                     if (_homeWorldPicker.Draw("Home World",
-                            _characterMonitor.ActiveCharacter?.World?.FormattedName ?? "Not Set",
+                            _characterMonitor.ActiveCharacter?.World?.Name.ExtractText() ?? "Not Set",
                             "Set the home world of the active character", ref homeWorldId, 100, 32,
                             ImGuiComboFlags.None))
                     {
@@ -268,7 +295,7 @@ public class MockWindow : GenericWindow
                     int activeWorldId = (int)(activeCharacter.ActiveWorldId);
 
                     if (_activeWorldPicker.Draw("Active World",
-                            _characterMonitor.ActiveCharacter?.ActiveWorld?.FormattedName ?? "Not Set",
+                            _characterMonitor.ActiveCharacter?.ActiveWorld?.Name.ExtractText() ?? "Not Set",
                             "Set the active world of the active character", ref activeWorldId, 100, 32,
                             ImGuiComboFlags.None))
                     {

@@ -5,8 +5,6 @@ using InventoryTools.Logic.Editors;
 using InventoryTools.Logic.Settings.Abstract;
 using InventoryTools.Services;
 using Microsoft.Extensions.Logging;
-using OtterGui;
-using OtterGui.Raii;
 
 namespace InventoryTools.Logic.Settings;
 
@@ -30,11 +28,11 @@ public class TooltipLocationScopeLimitSetting : Setting<List<InventorySearchScop
         return configuration.TooltipSearchScope;
     }
 
-    public override void Draw(InventoryToolsConfiguration configuration)
+    public override void Draw(InventoryToolsConfiguration configuration, string? customName, bool? disableReset,
+        bool? disableColouring)
     {
         var currentScopes = CurrentValue(configuration) ?? new List<InventorySearchScope>();
-        ImGui.SetNextItemWidth(LabelSize);
-        if (ColourModified && HasValueSet(configuration))
+        if (disableColouring != true && HasValueSet(configuration))
         {
             ImGui.PushStyleColor(ImGuiCol.Text, ImGuiColors.HealerGreen);
             ImGui.LabelText("##" + Key + "Label", Name);
@@ -53,7 +51,7 @@ public class TooltipLocationScopeLimitSetting : Setting<List<InventorySearchScop
 
         ImGui.SameLine();
         ImGuiService.HelpMarker(HelpText, Image, ImageSize);
-        if (!HideReset && HasValueSet(configuration))
+        if (disableReset != true && HasValueSet(configuration))
         {
             ImGui.SameLine();
             if (ImGui.Button("Reset##" + Key + "Reset"))
@@ -69,11 +67,10 @@ public class TooltipLocationScopeLimitSetting : Setting<List<InventorySearchScop
     }
 
     public override string Key { get; set; } = "TooltipLocationScopeLimit";
-    public override string Name { get; set; } = "Amount Owned - Search Locations";
+    public override string Name { get; set; } = "Add Item Locations (Search Locations)";
     public override string HelpText { get; set; } = "When showing the locations of the items you own in the tooltip, which inventories should be included in the search?";
 
-    public override string WizardName { get; } = "Amount Owned - Search Locations";
     public override SettingCategory SettingCategory { get; set; } = SettingCategory.ToolTips;
-    public override SettingSubCategory SettingSubCategory { get; } = SettingSubCategory.Visuals;
+    public override SettingSubCategory SettingSubCategory { get; } = SettingSubCategory.AddItemLocations;
     public override string Version => "1.7.0.11";
 }

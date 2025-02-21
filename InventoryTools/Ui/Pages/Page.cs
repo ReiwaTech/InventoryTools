@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using CriticalCommonLib.Services.Mediator;
+
 using InventoryTools.Logic;
 using InventoryTools.Services;
 using Microsoft.Extensions.Logging;
@@ -14,6 +15,8 @@ public abstract class Page : IConfigPage
     public abstract List<MessageBase>? Draw();
     public abstract bool IsMenuItem { get; }
     public abstract bool DrawBorder { get; }
+
+    public IEnumerable<Page>? ChildPages { get; set; }
 
     public ImGuiService ImGuiService => _imGuiService;
 

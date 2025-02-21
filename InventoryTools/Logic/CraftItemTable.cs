@@ -9,19 +9,21 @@ using System.Text;
 using CriticalCommonLib.Crafting;
 using CriticalCommonLib.Services.Mediator;
 using CsvHelper;
+
 using Dalamud.Interface.Colors;
 using ImGuiNET;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using OtterGui;
 using Dalamud.Interface.Utility.Raii;
+using InventoryTools.Logic.Settings;
 using InventoryTools.Services;
 
 namespace InventoryTools.Logic
 {
     public class CraftItemTable : RenderTableBase
     {
-        public CraftItemTable(RightClickService rightClickService, InventoryToolsConfiguration configuration) : base(rightClickService, configuration)
+        public CraftItemTable(ImGuiMenuService imGuiMenuService, ImGuiTooltipService imGuiTooltipService, InventoryToolsConfiguration configuration, ImGuiTooltipModeSetting tooltipModeSetting) : base(imGuiMenuService, imGuiTooltipService, tooltipModeSetting, configuration)
         {
             _tableFlags = ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersV |
                           ImGuiTableFlags.BordersOuterV | ImGuiTableFlags.BordersInnerV |
@@ -90,8 +92,9 @@ namespace InventoryTools.Logic
                                 using var tabItem = ImRaii.TabItem( groupedCraft.Item1.FormattedName());
                                 if (!tabItem.Success) continue;
 
+                                if (Columns.Count == 0) continue;
                                 using var table = ImRaii.Table(Key + "CraftTable", Columns.Count, _tableFlags);
-                                if (!table.Success || Columns.Count == 0) continue;
+                                if (!table.Success) continue;
                                 var refresh = false;
                                 ImGui.TableSetupScrollFreeze(Math.Min(FreezeCols ?? 0, Columns.Count),
                                     FreezeRows ?? (ShowFilterRow ? 2 : 1));
@@ -323,7 +326,7 @@ namespace InventoryTools.Logic
                 foreach (var item in CraftItems)
                 {
                     var newLine = new ExpandoObject() as IDictionary<string, Object>;
-                    newLine["Id"] = item.Item.ItemId;
+                    newLine["Id"] = item.Item.RowId;
                     foreach (var column in Columns)
                     {
                         newLine[column.Column.Name] = column.Column.JsonExport(column, item) ?? "";

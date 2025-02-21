@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using CriticalCommonLib.Services.Mediator;
+
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Plugin.Services;
@@ -43,7 +44,7 @@ namespace InventoryTools.Services
                 AddOverlay(overlay);
             }
         }
-        
+
         public FilterState? LastState => _lastState;
 
         public List<IGameOverlay> Overlays
@@ -112,7 +113,7 @@ namespace InventoryTools.Services
                     }
                     if (_windowVisible.ContainsKey(overlay.WindowName.ToString()) && _windowVisible[overlay.WindowName.ToString()] && overlay.Draw())
                     {
-                        
+
                     }
                 }
             }
@@ -135,6 +136,11 @@ namespace InventoryTools.Services
 
         public void RefreshOverlayStates()
         {
+            if (!_frameworkService.IsInFrameworkUpdateThread)
+            {
+                _frameworkService.RunOnFrameworkThread(RefreshOverlayStates);
+                return;
+            }
             var activeFilter = _listService.GetActiveUiList(false);
             var activeBackgroundFilter = _listService.GetActiveBackgroundList();
             _logger.LogDebug($"Overlays refreshing, active list: {activeFilter?.Name ?? "no list"}, background list: {activeBackgroundFilter?.Name ?? "no list"}");
@@ -206,7 +212,7 @@ namespace InventoryTools.Services
                     _windowsToTrack.Add(extraWindow.ToString());
                 }
             }
-            
+
             if (!Overlays.Contains(overlay))
             {
                 Overlays.Add(overlay);
@@ -226,7 +232,7 @@ namespace InventoryTools.Services
                 overlay.Clear();
             }
         }
-        
+
         public Task StartAsync(CancellationToken cancellationToken)
         {
             MediatorService.Subscribe<OverlaysRequestRefreshMessage>(this, RefreshRequested);
@@ -251,8 +257,8 @@ namespace InventoryTools.Services
         {
             _addonLifecycle.UnregisterListener(AddonEvent.PostRefresh, PostRefresh);
             _addonLifecycle.UnregisterListener(AddonEvent.PostSetup, PostSetup);
-            _addonLifecycle.UnregisterListener(AddonEvent.PreFinalize, PreFinalize);                
-            _addonLifecycle.UnregisterListener(AddonEvent.PostRequestedUpdate, PostRequestedUpdate);                
+            _addonLifecycle.UnregisterListener(AddonEvent.PreFinalize, PreFinalize);
+            _addonLifecycle.UnregisterListener(AddonEvent.PostRequestedUpdate, PostRequestedUpdate);
             _frameworkService.Update -= FrameworkOnUpdate;
             _tableService.TableRefreshed -= TableRefreshed;
             ClearOverlays();

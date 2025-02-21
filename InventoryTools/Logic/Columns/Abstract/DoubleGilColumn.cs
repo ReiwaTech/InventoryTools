@@ -1,6 +1,6 @@
 using System.Collections.Generic;
-using CriticalCommonLib.Interfaces;
 using CriticalCommonLib.Services.Mediator;
+
 using Dalamud.Game.Text;
 using ImGuiNET;
 using InventoryTools.Services;

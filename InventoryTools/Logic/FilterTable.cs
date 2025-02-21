@@ -7,21 +7,23 @@ using System.Linq;
 using System.Numerics;
 using System.Text;
 using CriticalCommonLib.Services.Mediator;
-using CriticalCommonLib.Sheets;
+
 using CsvHelper;
+
 using Dalamud.Interface.Colors;
 using ImGuiNET;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using OtterGui;
 using Dalamud.Interface.Utility.Raii;
+using InventoryTools.Logic.Settings;
 using InventoryTools.Services;
 
 namespace InventoryTools.Logic
 {
     public class FilterTable : RenderTableBase
     {
-        public FilterTable(RightClickService rightClickService, InventoryToolsConfiguration configuration) : base(rightClickService, configuration)
+        public FilterTable(ImGuiMenuService imGuiMenuService, ImGuiTooltipService imGuiTooltipService, InventoryToolsConfiguration configuration, ImGuiTooltipModeSetting tooltipModeSetting) : base(imGuiMenuService, imGuiTooltipService, tooltipModeSetting, configuration)
         {
 
         }
@@ -275,7 +277,7 @@ namespace InventoryTools.Logic
         {
             foreach (var column in Columns)
             {
-                var result = column.Column.DrawFooterFilter(FilterConfiguration, this);
+                var result = column.Column.DrawFooterFilter(column, this);
                 if (result != null)
                 {
                     result.HandleEvent(FilterConfiguration);

@@ -1,7 +1,8 @@
 using System.Collections.Generic;
+using AllaganLib.GameSheets.Sheets.Rows;
 using CriticalCommonLib.Crafting;
 using CriticalCommonLib.Models;
-using CriticalCommonLib.Sheets;
+
 using InventoryTools.Logic.Filters.Abstract;
 using InventoryTools.Services;
 using Microsoft.Extensions.Logging;
@@ -21,7 +22,7 @@ public class CraftCurrencyGroupFilter : ChoiceFilter<CurrencyGroupSetting>
         return null;
     }
 
-    public override bool? FilterItem(FilterConfiguration configuration, ItemEx item)
+    public override bool? FilterItem(FilterConfiguration configuration, ItemRow item)
     {
         return null;
     }
@@ -44,7 +45,7 @@ public class CraftCurrencyGroupFilter : ChoiceFilter<CurrencyGroupSetting>
     public override string HelpText { get; set; } =
         "Should the currency be grouped together or show up in the Gather/Buy list?";
 
-    public override FilterCategory FilterCategory { get; set; } = FilterCategory.Basic;
+    public override FilterCategory FilterCategory { get; set; } = FilterCategory.Settings;
     public override CurrencyGroupSetting DefaultValue { get; set; } = CurrencyGroupSetting.Separate;
     public override List<CurrencyGroupSetting> GetChoices(FilterConfiguration configuration)
     {

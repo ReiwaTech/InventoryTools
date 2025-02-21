@@ -1,15 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.Numerics;
-using CriticalCommonLib.Crafting;
-using CriticalCommonLib.Interfaces;
-using CriticalCommonLib.Models;
 using CriticalCommonLib.Services.Mediator;
-using CriticalCommonLib.Sheets;
-using Dalamud.Game.Text;
+
 using ImGuiNET;
-using InventoryTools.Extensions;
-using Dalamud.Interface.Utility.Raii;
 using InventoryTools.Services;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -47,7 +40,7 @@ namespace InventoryTools.Logic.Columns.Abstract
         {
             return CurrentValue(columnConfiguration, searchResult);
         }
-        
+
         public abstract string Name { get; set; }
         public virtual string? RenderName { get; } = null;
         public virtual FilterType DefaultIn { get; } = Logic.FilterType.None;
@@ -56,7 +49,7 @@ namespace InventoryTools.Logic.Columns.Abstract
         public virtual List<string>? FilterChoices { get; set; } = null;
         public abstract bool HasFilter { get; set; }
         public abstract ColumnFilterType FilterType { get; set; }
-        
+
         public virtual bool IsDebug { get; set; } = false;
 
         public bool Disposed => _disposed;
@@ -114,7 +107,7 @@ namespace InventoryTools.Logic.Columns.Abstract
             }
             ImGui.TableSetupColumn(columnConfiguration.Name ?? (RenderName ?? Name), imGuiTableColumnFlags, Width, (uint)columnIndex);
         }
-        public virtual IFilterEvent? DrawFooterFilter(FilterConfiguration configuration, FilterTable filterTable)
+        public virtual IFilterEvent? DrawFooterFilter(ColumnConfiguration columnConfiguration, FilterTable filterTable)
         {
             return null;
         }
@@ -136,14 +129,14 @@ namespace InventoryTools.Logic.Columns.Abstract
             Dispose(true);
             GC.SuppressFinalize(this);
         }
-        
+
         protected virtual void Dispose(bool disposing)
         {
             if(!Disposed && disposing)
             {
 
             }
-            _disposed = true;         
+            _disposed = true;
         }
 
     }

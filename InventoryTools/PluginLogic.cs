@@ -8,10 +8,12 @@ using CriticalCommonLib.MarketBoard;
 using CriticalCommonLib.Models;
 using CriticalCommonLib.Services;
 using CriticalCommonLib.Services.Mediator;
+
 using Dalamud.Plugin.Services;
 using InventoryTools.Hotkeys;
 using InventoryTools.Logic;
 using InventoryTools.Logic.Filters;
+using InventoryTools.Logic.ItemRenderers;
 using InventoryTools.Mediator;
 using InventoryTools.Services;
 using InventoryTools.Services.Interfaces;
@@ -37,10 +39,12 @@ namespace InventoryTools
         private readonly IMobTracker _mobTracker;
         private readonly IHotkeyService _hotkeyService;
         private readonly ICraftMonitor _craftMonitor;
-        private readonly IGameInterface _gameInterface;
+        private readonly IUnlockTrackerService _unlockTrackerService;
         private readonly IEnumerable<BaseTooltip> tooltips;
         private readonly IEnumerable<IHotkey> hotkeys;
         private readonly ITooltipService _tooltipService;
+        private readonly Func<ItemInfoRenderCategory, GenericHasSourceCategoryFilter> _sourceCategoryFilterFactory;
+        private readonly BuyFromVendorPriceFilter _buyFromVendorPriceFilter;
         private readonly Func<Type, IFilter> _filterFactory;
         private readonly IMarketCache _marketCache;
         private Dictionary<uint, InventoryMonitor.ItemChangesItem> _recentlyAddedSeen = new();
@@ -64,8 +68,8 @@ namespace InventoryTools
         }
 
         private DateTime? _nextSaveTime = null;
-        
-        public PluginLogic(ConfigurationManagerService configurationManagerService, IChatUtilities chatUtilities, IListService listService, ILogger<PluginLogic> logger, IFramework framework, MediatorService mediatorService, HostedInventoryHistory hostedInventoryHistory, IInventoryMonitor inventoryMonitor, IInventoryScanner inventoryScanner, ICharacterMonitor characterMonitor, InventoryToolsConfiguration configuration, IMobTracker mobTracker, IHotkeyService hotkeyService, ICraftMonitor craftMonitor, IGameInterface gameInterface,IEnumerable<BaseTooltip> tooltips, IEnumerable<IHotkey> hotkeys, Func<Type,IFilter> filterFactory, IMarketCache marketCache, ITooltipService tooltipService) : base(logger, mediatorService)
+
+        public PluginLogic(ConfigurationManagerService configurationManagerService, IChatUtilities chatUtilities, IListService listService, ILogger<PluginLogic> logger, IFramework framework, MediatorService mediatorService, HostedInventoryHistory hostedInventoryHistory, IInventoryMonitor inventoryMonitor, IInventoryScanner inventoryScanner, ICharacterMonitor characterMonitor, InventoryToolsConfiguration configuration, IMobTracker mobTracker, IHotkeyService hotkeyService, ICraftMonitor craftMonitor, IUnlockTrackerService unlockTrackerService,IEnumerable<BaseTooltip> tooltips, IEnumerable<IHotkey> hotkeys, Func<Type,IFilter> filterFactory, IMarketCache marketCache, ITooltipService tooltipService, Func<ItemInfoRenderCategory, GenericHasSourceCategoryFilter> sourceCategoryFilterFactory, BuyFromVendorPriceFilter buyFromVendorPriceFilter) : base(logger, mediatorService)
         {
             _configurationManagerService = configurationManagerService;
             _chatUtilities = chatUtilities;
@@ -80,19 +84,30 @@ namespace InventoryTools
             _mobTracker = mobTracker;
             _hotkeyService = hotkeyService;
             _craftMonitor = craftMonitor;
-            _gameInterface = gameInterface;
+            _unlockTrackerService = unlockTrackerService;
             this.tooltips = tooltips;
             this.hotkeys = hotkeys;
             _tooltipService = tooltipService;
+            _sourceCategoryFilterFactory = sourceCategoryFilterFactory;
+            _buyFromVendorPriceFilter = buyFromVendorPriceFilter;
             _filterFactory = filterFactory;
             _marketCache = marketCache;
+            this.MediatorService.Subscribe<PluginLoadedMessage>(this, PluginLoaded);
 
+        }
+
+        private void PluginLoaded(PluginLoadedMessage obj)
+        {
+            _inventoryMonitor.Start();
+            _inventoryScanner.Enable();
         }
 
         private void CraftMonitorOnCraftCompleted(uint itemid, FFXIVClientStructs.FFXIV.Client.Game.InventoryItem.ItemFlags flags, uint quantity)
         {
+            _logger.LogTrace("Craft completed for item " + itemid);
+
             var activeCraftList = _listService.GetActiveCraftList();
-            if (activeCraftList != null && activeCraftList.FilterType == FilterType.CraftFilter)
+            if (activeCraftList != null && activeCraftList.FilterType == FilterType.CraftFilter && activeCraftList.CraftList.CraftListMode == CraftListMode.Normal)
             {
                 activeCraftList.CraftList.MarkCrafted(itemid, flags, quantity);
                 if (activeCraftList is { IsEphemeralCraftList: true, CraftList.IsCompleted: true })
@@ -109,19 +124,20 @@ namespace InventoryTools
 
         private void CraftMonitorOnCraftFailed(uint itemid)
         {
+            _logger.LogTrace("Craft failed for item " + itemid);
         }
 
         private void CraftMonitorOnCraftStarted(uint itemid)
         {
+            _logger.LogTrace("Craft started for item " + itemid);
         }
 
-
-        private void GameInterfaceOnAcquiredItemsUpdated()
+        private void UnlockTrackerServiceOnAcquiredItemsUpdated()
         {
             var activeCharacter = _characterMonitor.ActiveCharacterId;
             if (activeCharacter != 0)
             {
-                _configuration.AcquiredItems[activeCharacter] = _gameInterface.AcquiredItems;
+                _configuration.AcquiredItems[activeCharacter] = _unlockTrackerService.UnlockedItems;
             }
         }
 
@@ -138,8 +154,6 @@ namespace InventoryTools
                 }
             }
         }
-
-
 
         private void FrameworkOnUpdate(IFramework framework)
         {
@@ -202,40 +216,26 @@ namespace InventoryTools
             }
         }
 
-        private void CharacterMonitorOnOnCharacterUpdated(Character? character)
-        {
-            if (character != null)
-            {
-                _configuration.IsDirty = true;
-                if (_configuration.AcquiredItems.ContainsKey(character.CharacterId))
-                {
-                    _gameInterface.AcquiredItems = _configuration.AcquiredItems[character.CharacterId];
-                }
-            }
-            else
-            {
-                _gameInterface.AcquiredItems = new HashSet<uint>();
-            }
-        }
-
         public void LoadDefaultData()
         {
             _listService.GetDefaultCraftList();
-            
+
             AddAllFilter();
 
             AddRetainerFilter();
 
             AddPlayerFilter();
-            
+
             AddFreeCompanyFilter();
 
+            AddHousingFilter();
+
             AddAllGameItemsFilter();
-            
+
             AddFavouritesFilter();
-            
+
             AddCraftFilter();
-            
+
             AddHistoryFilter();
         }
 
@@ -289,10 +289,19 @@ namespace InventoryTools
             _listService.AddList(newFilter);
         }
 
+        public void AddHousingFilter(string newName = "Housing")
+        {
+            var newFilter = new FilterConfiguration(newName,  FilterType.SearchFilter);
+            newFilter.DisplayInTabs = true;
+            newFilter.SourceAllHouses = true;
+            _listService.AddDefaultColumns(newFilter);
+            _listService.AddList(newFilter);
+        }
+
         public void AddAllGameItemsFilter(string newName = "All Game Items")
         {
             var allGameItemsFilter = new FilterConfiguration(newName, FilterType.GameItemFilter);
-            allGameItemsFilter.DisplayInTabs = true;      
+            allGameItemsFilter.DisplayInTabs = true;
             _listService.AddDefaultColumns(allGameItemsFilter);
             _listService.AddList(allGameItemsFilter);
         }
@@ -302,7 +311,7 @@ namespace InventoryTools
             var newFilter = new FilterConfiguration(newName, FilterType.GameItemFilter);
             var favouritesFilter = (FavouritesFilter)_filterFactory.Invoke(typeof(FavouritesFilter));
             favouritesFilter.UpdateFilterConfiguration(newFilter, true);
-            newFilter.DisplayInTabs = true;   
+            newFilter.DisplayInTabs = true;
             _listService.AddDefaultColumns(newFilter);
             _listService.AddList(newFilter);
         }
@@ -310,7 +319,7 @@ namespace InventoryTools
         public void AddCraftFilter(string newName = "Craft List")
         {
             var newFilter = _listService.AddNewCraftList(newName);
-            newFilter.DisplayInTabs = true;            
+            newFilter.DisplayInTabs = true;
         }
 
         public void AddNewCraftFilter()
@@ -333,9 +342,10 @@ namespace InventoryTools
             sampleFilter.SourceAllCharacters = true;
             sampleFilter.SourceAllRetainers = true;
             sampleFilter.SourceAllFreeCompanies = true;
-            sampleFilter.CanBeBought = true;
-            sampleFilter.ShopBuyingPrice = "<=100";
+            _sourceCategoryFilterFactory.Invoke(ItemInfoRenderCategory.Shop).UpdateFilterConfiguration(sampleFilter, true);
+            _buyFromVendorPriceFilter.UpdateFilterConfiguration(sampleFilter, "<=100");
             _listService.AddList(sampleFilter);
+            _listService.AddDefaultColumns(sampleFilter);
         }
 
         public void AddSampleFilterMaterials(string newName = "Put away materials")
@@ -346,9 +356,10 @@ namespace InventoryTools
             sampleFilter.DestinationCategories =  new HashSet<InventoryCategory>() {InventoryCategory.RetainerBags};
             sampleFilter.FilterItemsInRetainersEnum = FilterItemsRetainerEnum.Yes;
             sampleFilter.HighlightWhen = "Always";
-            var gatherFilter = (CanBeGatheredFilter)_filterFactory.Invoke(typeof(CanBeGatheredFilter));
+            var gatherFilter = _sourceCategoryFilterFactory.Invoke(ItemInfoRenderCategory.Gathering);
             gatherFilter.UpdateFilterConfiguration(sampleFilter, true);
             _listService.AddList(sampleFilter);
+            _listService.AddDefaultColumns(sampleFilter);
         }
 
         public void AddSampleFilterDuplicatedItems(string newName = "Duplicated SortItems")
@@ -361,6 +372,7 @@ namespace InventoryTools
             sampleFilter.DuplicatesOnly = true;
             sampleFilter.HighlightWhen = "Always";
             _listService.AddList(sampleFilter);
+            _listService.AddDefaultColumns(sampleFilter);
         }
 
 
@@ -375,7 +387,7 @@ namespace InventoryTools
         {
             _logger.LogTrace("PluginLogic: Inventory changed, saving to config.");
             var allItems = _inventoryMonitor.AllItems.ToList();
-            _configurationManagerService.SaveInventories(allItems);
+            _configurationManagerService.SaveInventoriesAsync(allItems);
             if (_configuration.AutomaticallyDownloadMarketPrices)
             {
                 var activeCharacter = _characterMonitor.ActiveCharacter;
@@ -406,17 +418,14 @@ namespace InventoryTools
         public Task StartAsync(CancellationToken cancellationToken)
         {
             Logger.LogTrace("Starting service {type} ({this})", GetType().Name, this);
-            _inventoryMonitor.Start();
-            _inventoryScanner.Enable();
             _inventoryMonitor.OnInventoryChanged += InventoryMonitorOnOnInventoryChanged;
-            _characterMonitor.OnCharacterUpdated += CharacterMonitorOnOnCharacterUpdated;
             _framework.Update += FrameworkOnUpdate;
             _configurationManagerService.ConfigurationChanged += ConfigOnConfigurationChanged;
 
             _craftMonitor.CraftStarted += CraftMonitorOnCraftStarted;
             _craftMonitor.CraftFailed += CraftMonitorOnCraftFailed ;
             _craftMonitor.CraftCompleted += CraftMonitorOnCraftCompleted ;
-            _gameInterface.AcquiredItemsUpdated += GameInterfaceOnAcquiredItemsUpdated;
+            _unlockTrackerService.ItemUnlockStatusChanged += UnlockTrackerServiceOnAcquiredItemsUpdated;
 
             foreach (var tooltip in tooltips.OrderBy(c => c.Order))
             {
@@ -436,17 +445,16 @@ namespace InventoryTools
         public Task StopAsync(CancellationToken cancellationToken)
         {
             Logger.LogTrace("Stopping service {type} ({this})", GetType().Name, this);
-            _gameInterface.AcquiredItemsUpdated -= GameInterfaceOnAcquiredItemsUpdated;
+            _unlockTrackerService.ItemUnlockStatusChanged -= UnlockTrackerServiceOnAcquiredItemsUpdated;
             _configuration.SavedCharacters = _characterMonitor.Characters;
             _framework.Update -= FrameworkOnUpdate;
             _inventoryMonitor.OnInventoryChanged -= InventoryMonitorOnOnInventoryChanged;
-            _characterMonitor.OnCharacterUpdated -= CharacterMonitorOnOnCharacterUpdated;
             _craftMonitor.CraftStarted -= CraftMonitorOnCraftStarted;
             _craftMonitor.CraftFailed -= CraftMonitorOnCraftFailed ;
             _craftMonitor.CraftCompleted -= CraftMonitorOnCraftCompleted ;
             _configurationManagerService.ConfigurationChanged -= ConfigOnConfigurationChanged;
             _configurationManagerService.Save();
-            _configurationManagerService.SaveInventories(_inventoryMonitor.AllItems.ToList());
+            _configurationManagerService.SaveInventoriesAsync(_inventoryMonitor.AllItems.ToList()).Wait(TimeSpan.FromSeconds(2));
             _configurationManagerService.SaveHistory(_hostedInventoryHistory.GetHistory());
             if (_configuration.TrackMobSpawns)
             {

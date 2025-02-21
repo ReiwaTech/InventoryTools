@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging;
 
 namespace InventoryTools.Logic.Settings.Abstract
 {
-    public abstract class ChoiceSetting<T> : Setting<T> where T : IComparable
+    public abstract class ChoiceSetting<T> : Setting<T> where T : IComparable?
     {
         public ChoiceSetting(ILogger logger, ImGuiService imGuiService) : base(logger, imGuiService)
         {
@@ -18,21 +18,21 @@ namespace InventoryTools.Logic.Settings.Abstract
 
         public virtual string GetFormattedChoice(T choice)
         {
-            return Choices.SingleOrDefault(c => c.Key.Equals(choice)).Value;
+            return Choices.SingleOrDefault(c => c.Key!.Equals(choice)).Value;
         }
-        
-        public override void Draw(InventoryToolsConfiguration configuration)
+
+        public override void Draw(InventoryToolsConfiguration configuration, string? customName, bool? disableReset,
+            bool? disableColouring)
         {
-            ImGui.SetNextItemWidth(LabelSize);
-            if (ColourModified && HasValueSet(configuration))
+            if (disableColouring != true && HasValueSet(configuration))
             {
                 ImGui.PushStyleColor(ImGuiCol.Text, ImGuiColors.HealerGreen);
-                ImGui.LabelText("##" + Key + "Label", Name);
+                ImGui.LabelText("##" + Key + "Label", customName ?? Name);
                 ImGui.PopStyleColor();
             }
             else
             {
-                ImGui.LabelText("##" + Key + "Label", Name);
+                ImGui.LabelText("##" + Key + "Label", customName ?? Name);
             }
 
             var choices = Choices;
@@ -62,7 +62,7 @@ namespace InventoryTools.Logic.Settings.Abstract
 
             ImGui.SameLine();
             ImGuiService.HelpMarker(HelpText, Image, ImageSize);
-            if (!HideReset && HasValueSet(configuration))
+            if (disableReset != true && HasValueSet(configuration))
             {
                 ImGui.SameLine();
                 if (ImGui.Button("Reset##" + Key + "Reset"))

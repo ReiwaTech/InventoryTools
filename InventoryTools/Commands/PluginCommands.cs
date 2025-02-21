@@ -1,10 +1,12 @@
 using System;
-using System.Linq;
+using AllaganLib.GameSheets.Sheets;
+using AllaganLib.GameSheets.Sheets.Rows;
+using AllaganLib.Shared.Extensions;
 using CriticalCommonLib;
 using CriticalCommonLib.Extensions;
 using CriticalCommonLib.Services;
 using CriticalCommonLib.Services.Mediator;
-using CriticalCommonLib.Sheets;
+
 using InventoryTools.Attributes;
 using InventoryTools.Mediator;
 using InventoryTools.Services.Interfaces;
@@ -18,18 +20,18 @@ namespace InventoryTools.Commands
         public ILogger<PluginCommands> Logger { get; }
         private readonly MediatorService _mediatorService;
         private readonly IChatUtilities _chatUtilities;
-        private readonly ExcelCache _excelCache;
+        private readonly ItemSheet _itemSheet;
         private readonly IListService _listService;
 
-        public PluginCommands(MediatorService mediatorService, IChatUtilities chatUtilities, ExcelCache excelCache, IListService listService, ILogger<PluginCommands> logger)
+        public PluginCommands(MediatorService mediatorService, IChatUtilities chatUtilities, ItemSheet itemSheet, IListService listService, ILogger<PluginCommands> logger)
         {
             Logger = logger;
             _mediatorService = mediatorService;
             _chatUtilities = chatUtilities;
-            _excelCache = excelCache;
+            _itemSheet = itemSheet;
             _listService = listService;
         }
-        
+
         [Command("/allagantools")]
         [Aliases("/atools")]
         [HelpMessage("Shows the allagan tools items list window.")]
@@ -57,7 +59,7 @@ namespace InventoryTools.Commands
         {
             _mediatorService.Publish(new ToggleGenericWindowMessage(typeof(ENpcsWindow)));
         }
- 
+
 
         [Command("/athighlight")]
         [Aliases("/atf")]
@@ -185,6 +187,13 @@ namespace InventoryTools.Commands
             CloseFilterWindows(command,args);
         }
 
+        [Command("/craftoverlay")]
+        [HelpMessage("Toggles the crafting overlay window.")]
+        public void CraftOverlay(string command, string args)
+        {
+            _mediatorService.Publish(new ToggleGenericWindowMessage(typeof(CraftOverlayWindow)));
+        }
+
         [Command("/moreinfo")]
         [Aliases("/itemwindow")]
         [HelpMessage("Opens the more information window for a specific item. Provide the name of the item or the ID of the item.")]
@@ -196,14 +205,17 @@ namespace InventoryTools.Commands
                 return;
             }
 
-            ItemEx? item;
+            ItemRow? item = null;
             if (UInt32.TryParse(args, out uint itemId))
             {
-                item = _excelCache.GetItemExSheet().GetRow(itemId);
+                item = _itemSheet.GetRowOrDefault(itemId);
             }
             else
             {
-                item = _excelCache.GetItemExSheet().FirstOrDefault(c => c!.SearchString == args.ToParseable(), null);
+                if (_itemSheet.ItemsBySearchString.TryGetValue(args.ToParseable(), out itemId))
+                {
+                    item = _itemSheet.GetRowOrDefault(itemId);
+                }
             }
             if (item != null && item.RowId != 0)
             {
@@ -215,6 +227,6 @@ namespace InventoryTools.Commands
             }
         }
 
-        
+
     }
 }

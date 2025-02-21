@@ -3,17 +3,21 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using AllaganLib.GameSheets.Sheets;
 using CriticalCommonLib;
 using CriticalCommonLib.Crafting;
-using CriticalCommonLib.Extensions;
 using CriticalCommonLib.Models;
 using CriticalCommonLib.Services;
 using CriticalCommonLib.Services.Mediator;
+
 using FFXIVClientStructs.FFXIV.Client.Game;
 using ImGuiNET;
 using InventoryTools.Logic;
 using LuminaSupplemental.Excel.Model;
 using Dalamud.Interface.Utility.Raii;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using FFXIVClientStructs.FFXIV.Client.LayoutEngine;
+using FFXIVClientStructs.FFXIV.Client.LayoutEngine.Layer;
 using InventoryTools.Mediator;
 using InventoryTools.Services;
 using InventoryTools.Ui.DebugWindows;
@@ -33,26 +37,44 @@ namespace InventoryTools.Ui
         Random = 4,
         CraftAgents = 5,
         DebugWindows = 6,
-        Addons = 7
+        Addons = 7,
+        GameInventory = 8,
+        Unlocks = 9,
+        LayerDebugger = 10,
     }
-    public class DebugWindow : GenericWindow
+    public class DebugWindow : GenericWindow, IMenuWindow
     {
         private readonly IInventoryMonitor _inventoryMonitor;
         private readonly IInventoryScanner _inventoryScanner;
         private readonly ICraftMonitor _craftMonitor;
         private readonly ICharacterMonitor _characterMonitor;
         private readonly IGameGui gameGui;
-        private readonly ExcelCache _excelCache;
+        private readonly ItemSheet _itemSheet;
         private readonly InventoryToolsConfiguration _configuration;
+        private InventoryType? _inventoryType;
 
-        public DebugWindow(ILogger<DebugWindow> logger, MediatorService mediator, ImGuiService imGuiService, InventoryToolsConfiguration configuration, IInventoryMonitor inventoryMonitor, IInventoryScanner inventoryScanner, ICraftMonitor craftMonitor, ICharacterMonitor characterMonitor, IGameGui gameGui, ExcelCache excelCache, string name = "Debug Window") : base(logger, mediator, imGuiService, configuration, name)
+        public DebugWindow(ILogger<DebugWindow> logger,
+            MediatorService mediator,
+            ImGuiService imGuiService,
+            InventoryToolsConfiguration configuration,
+            IInventoryMonitor inventoryMonitor,
+            IInventoryScanner inventoryScanner,
+            ICraftMonitor craftMonitor,
+            ICharacterMonitor characterMonitor,
+            IGameGui gameGui,
+            ItemSheet itemSheet,
+            string name = "Debug Window") : base(logger,
+            mediator,
+            imGuiService,
+            configuration,
+            name)
         {
             _inventoryMonitor = inventoryMonitor;
             _inventoryScanner = inventoryScanner;
             _craftMonitor = craftMonitor;
             _characterMonitor = characterMonitor;
             this.gameGui = gameGui;
-            _excelCache = excelCache;
+            _itemSheet = itemSheet;
             _configuration = configuration;
         }
         public override void Initialize()
@@ -60,7 +82,7 @@ namespace InventoryTools.Ui
             Key = "debug";
             WindowName = "Debug";
         }
-        
+
         public override bool SaveState => true;
 
         public override Vector2? DefaultSize { get; } = new(700, 700);
@@ -98,6 +120,11 @@ namespace InventoryTools.Ui
                         _configuration.SelectedDebugPage = (int)DebugMenu.InventoryMonitor;
                     }
 
+                    if (ImGui.Selectable("Game Inventory", _configuration.SelectedDebugPage == (int)DebugMenu.GameInventory))
+                    {
+                        _configuration.SelectedDebugPage = (int)DebugMenu.GameInventory;
+                    }
+
                     if (ImGui.Selectable("Random", _configuration.SelectedDebugPage == (int)DebugMenu.Random))
                     {
                         _configuration.SelectedDebugPage = (int)DebugMenu.Random;
@@ -116,6 +143,16 @@ namespace InventoryTools.Ui
                     if (ImGui.Selectable("Addons", _configuration.SelectedDebugPage == (int)DebugMenu.Addons))
                     {
                         _configuration.SelectedDebugPage = (int)DebugMenu.Addons;
+                    }
+
+                    if (ImGui.Selectable("Unlocks", _configuration.SelectedDebugPage == (int)DebugMenu.Unlocks))
+                    {
+                        _configuration.SelectedDebugPage = (int)DebugMenu.Unlocks;
+                    }
+
+                    if (ImGui.Selectable("Layer Debugger", _configuration.SelectedDebugPage == (int)DebugMenu.LayerDebugger))
+                    {
+                        _configuration.SelectedDebugPage = (int)DebugMenu.LayerDebugger;
                     }
 
                 }
@@ -149,6 +186,14 @@ namespace InventoryTools.Ui
                     else if (_configuration.SelectedDebugPage == (int)DebugMenu.Addons)
                     {
                         DrawAddons();
+                    }
+                    else if (_configuration.SelectedDebugPage == (int)DebugMenu.LayerDebugger)
+                    {
+                        DrawLayerDebugger();
+                    }
+                    else if (_configuration.SelectedDebugPage == (int)DebugMenu.Unlocks)
+                    {
+                        DrawUnlocks();
                     }
 /*
                     else if (_configuration.SelectedDebugPage == 2)
@@ -225,7 +270,7 @@ namespace InventoryTools.Ui
 
                                             var uldManager = listItem->AtkComponentButton.AtkComponentBase.UldManager;
                                             if (uldManager.NodeListCount < 4) continue;
-                                            
+
                                             var textNode = (AtkTextNode*)uldManager.SearchNodeById(3);
                                             if (textNode != null)
                                             {
@@ -513,7 +558,7 @@ namespace InventoryTools.Ui
                             ImGui.TextUnformatted("Durability: " + craftMonitorAgent.Durability);
                             ImGui.TextUnformatted("HQ Chance: " + craftMonitorAgent.HqChance);
                             ImGui.TextUnformatted("Item: " +
-                                       (_excelCache.GetItemExSheet().GetRow(craftMonitorAgent.ResultItemId)
+                                       (_excelCache.GetItemSheet().GetRow(craftMonitorAgent.ResultItemId)
                                            ?.NameString ?? "Unknown"));
                             ImGui.TextUnformatted(
                                 "Current Recipe: " + _craftMonitor.CurrentRecipe?.RowId ?? "Unknown");
@@ -542,7 +587,7 @@ namespace InventoryTools.Ui
                             ImGui.TextUnformatted("Failed: " + simpleCraftMonitorAgent.TotalFailed);
                             ImGui.TextUnformatted("Total Completed: " + simpleCraftMonitorAgent.TotalCompleted);
                             ImGui.TextUnformatted("Total: " + simpleCraftMonitorAgent.Total);
-                            ImGui.TextUnformatted("Item: " + _excelCache.GetItemExSheet()
+                            ImGui.TextUnformatted("Item: " + _excelCache.GetItemSheet()
                                 .GetRow(simpleCraftMonitorAgent.ResultItemId)?.NameString.ToString() ?? "Unknown");
                             ImGui.TextUnformatted(
                                 "Current Recipe: " + _craftMonitor.CurrentRecipe?.RowId ?? "Unknown");
@@ -610,7 +655,7 @@ namespace InventoryTools.Ui
                                                            (ulong)sizeof(InventoryItem) * (ulong)i;
                                             Utils.ClickToCopyText($"{itemAddr:X}");
                                             ImGui.SameLine();
-                                            var actualItem = _excelCache.GetItemExSheet().GetRow(item.ItemID);
+                                            var actualItem = _excelCache.GetItemSheet().GetRow(item.ItemID);
                                             var actualItemName = actualItem?.Name ?? "<Not Found>";
                                             actualItemName += " - " + item.HashCode();
                                             Utils.PrintOutObject(item, (ulong)&item, new List<string> { $"Items[{i}]" },
@@ -714,6 +759,31 @@ namespace InventoryTools.Ui
                     else if (_configuration.SelectedDebugPage == (int)DebugMenu.InventoryScanner)
                     {
                         DrawInventoryScannerDebugTab();
+                    }
+                    else if (_configuration.SelectedDebugPage == (int)DebugMenu.GameInventory)
+                    {
+                        var inventoryTypes = Enum.GetValues<InventoryType>();
+                        using (var combo = ImRaii.Combo("Inventory Type", _inventoryType?.ToString() ?? "None"))
+                        {
+                            if (combo)
+                            {
+                                foreach (var inventoryType in inventoryTypes)
+                                {
+                                    if (ImGui.Selectable(inventoryType.ToString()))
+                                    {
+                                        _inventoryType = inventoryType;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (_inventoryType != null)
+                        {
+                            var container = InventoryManager.Instance()->GetInventoryContainer(_inventoryType.Value);
+                            ImGui.Text(container->Loaded != 0 ? "Container Loaded" : "Container Unloaded");
+                            ImGui.Text(container->Loaded.ToString());
+
+                        }
                     }
                     else if (_configuration.SelectedDebugPage == (int)DebugMenu.InventoryMonitor)
                     {
@@ -856,12 +926,60 @@ namespace InventoryTools.Ui
                     {
 
                     }*/
-                    
+
                 }
             }
         }
+
+        private unsafe void DrawLayerDebugger()
+        {
+            var activeLayout = LayoutWorld.Instance()->ActiveLayout;
+            if (activeLayout != null)
+            {
+                ImGui.TextUnformatted($"Level ID: {activeLayout->LevelId}");
+                ImGui.TextUnformatted($"ID: {activeLayout->Id}");
+                ImGui.TextUnformatted($"Type: {activeLayout->Type}");
+                ImGui.TextUnformatted($"Resource Strings: {activeLayout->Type}");
+                foreach (var resourcePath in activeLayout->ResourcePaths.Strings)
+                {
+                    if (resourcePath.Value != null)
+                    {
+                        ImGui.TextUnformatted($"{resourcePath.Value->DataString}");
+                    }
+                }
+                ImGui.TextUnformatted($"Layers:");
+                foreach (var layer in activeLayout->Layers)
+                {
+                    ImGui.TextUnformatted($"{layer.Item1}");
+                    var pointer = layer.Item2.Value;
+                    if (pointer != null)
+                    {
+                        ImGui.TextUnformatted($"Layer ID: " + pointer->Id);
+                        ImGui.TextUnformatted($"Layer Group ID: " + pointer->LayerGroupId);
+                        ImGui.TextUnformatted($"Festival ID: " + pointer->FestivalId);
+                    }
+                }
+            }
+        }
+
         private void DrawInventoryScannerDebugTab()
         {
+
+            ImGui.TextUnformatted("Inventories Seen via Network Traffic");
+            foreach (var inventory in _inventoryScanner.LoadedInventories)
+            {
+                ImGui.TextUnformatted(inventory.ToString());
+            }
+
+            ImGui.TextUnformatted("Retainer Inventories Seen via Network Traffic");
+            foreach (var inventory in _inventoryScanner.InMemoryRetainers)
+            {
+                ImGui.TextUnformatted(inventory.Key.ToString());
+                foreach (var hashSet in inventory.Value)
+                {
+                    ImGui.TextUnformatted(hashSet.ToString());
+                }
+            }
             if (ImGui.TreeNode("Character Bags 1##characterBags1"))
             {
                 for (int i = 0; i < _inventoryScanner.CharacterBag1.Length; i++)
@@ -1169,7 +1287,7 @@ namespace InventoryTools.Ui
 
                 ImGui.TreePop();
             }
-            
+
             if (ImGui.TreeNode("Free Company Currency##freeCompanyCurrency"))
             {
                 var bagType = (InventoryType)CriticalCommonLib.Enums.InventoryType.FreeCompanyCurrency;
@@ -1504,6 +1622,17 @@ namespace InventoryTools.Ui
                 MediatorService.Publish(new OpenGenericWindowMessage(typeof(DebugListServiceWindow)));
             }
         }
+
+        public void DrawUnlocks()
+        {
+            var acquiredItems = _configuration.AcquiredItems;
+            foreach (var characterPair in acquiredItems)
+            {
+                var character = _characterMonitor.GetCharacterById(characterPair.Key);
+                ImGui.TextUnformatted(character?.FormattedName ?? "Unknown Character");
+                ImGui.Text($"{characterPair.Value.Count} unlocked items");
+            }
+        }
         public unsafe void DrawAddons()
         {
             if (ImGui.CollapsingHeader("Free Company Chest"))
@@ -1533,10 +1662,19 @@ namespace InventoryTools.Ui
             }
             if (ImGui.CollapsingHeader("Armoire(CabinetWithdraw)"))
             {
+                var uiState = UIState.Instance();
+                if (uiState == null)
+                {
+                    ImGui.Text("UIState not found.");
+                }
+                else
+                {
+                    ImGui.Text(uiState->Cabinet.IsCabinetLoaded() ? "Cabinet Loaded" : "Cabinet Not Loaded");
+                }
+
                 var addon = this.gameGui.GetAddonByName("CabinetWithdraw");
                 if (addon != IntPtr.Zero)
                 {
-
                     var cabinetWithdraw = (AddonCabinetWithdraw*)addon;
                     if (cabinetWithdraw != null)
                     {
@@ -1551,6 +1689,20 @@ namespace InventoryTools.Ui
                         ImGui.Text($"Search Selected: { (cabinetWithdraw->SearchRadioButton->IsChecked ? "yes" : "no") }");
                     }
                 }
+            }
+
+            if (ImGui.CollapsingHeader("Housing Goods"))
+            {
+                var addon = this.gameGui.GetAddonByName("HousingGoods");
+                if (addon != IntPtr.Zero)
+                {
+                    var housingGoods = (AddonHousingGoods*)addon;
+                    if (housingGoods != null)
+                    {
+                        ImGui.Text($"Current Tab: { (housingGoods->CurrentTab) }");
+                    }
+                }
+
             }
         }
 
@@ -1572,22 +1724,22 @@ namespace InventoryTools.Ui
                 ImGui.TextUnformatted("Durability: " + craftMonitorAgent.Durability);
                 ImGui.TextUnformatted("HQ Chance: " + craftMonitorAgent.HqChance);
                 ImGui.TextUnformatted("Item: " +
-                           (_excelCache.GetItemExSheet().GetRow(craftMonitorAgent.ResultItemId)
+                           (_itemSheet.GetRow(craftMonitorAgent.ResultItemId)
                                ?.NameString ?? "Unknown"));
                 ImGui.TextUnformatted(
                     "Current Recipe: " + _craftMonitor.CurrentRecipe?.RowId ?? "Unknown");
                 ImGui.TextUnformatted(
-                    "Recipe Difficulty: " + _craftMonitor.RecipeLevelTable?.Difficulty ??
+                    "Recipe Difficulty: " + _craftMonitor.RecipeLevelTable?.Base.Difficulty ??
                     "Unknown");
                 ImGui.TextUnformatted(
                     "Recipe Difficulty Factor: " +
-                    _craftMonitor.CurrentRecipe?.DifficultyFactor ??
+                    _craftMonitor.CurrentRecipe?.Base.DifficultyFactor ??
                     "Unknown");
                 ImGui.TextUnformatted(
-                    "Recipe Durability: " + _craftMonitor.RecipeLevelTable?.Durability ??
+                    "Recipe Durability: " + _craftMonitor.RecipeLevelTable?.Base.Durability ??
                     "Unknown");
                 ImGui.TextUnformatted("Suggested Craftsmanship: " +
-                    _craftMonitor.RecipeLevelTable?.SuggestedCraftsmanship ?? "Unknown");
+                    _craftMonitor.RecipeLevelTable?.Base.SuggestedCraftsmanship ?? "Unknown");
                 ImGui.TextUnformatted(
                     "Current Craft Type: " + _craftMonitor.Agent?.CraftType ?? "Unknown");
             }
@@ -1599,8 +1751,8 @@ namespace InventoryTools.Ui
                 ImGui.TextUnformatted("Failed: " + simpleCraftMonitorAgent.TotalFailed);
                 ImGui.TextUnformatted("Total Completed: " + simpleCraftMonitorAgent.TotalCompleted);
                 ImGui.TextUnformatted("Total: " + simpleCraftMonitorAgent.Total);
-                ImGui.TextUnformatted("Item: " + _excelCache.GetItemExSheet()
-                    .GetRow(simpleCraftMonitorAgent.ResultItemId)?.NameString.ToString() ?? "Unknown");
+                ImGui.TextUnformatted("Item: " + _itemSheet
+                    .GetRowOrDefault(simpleCraftMonitorAgent.ResultItemId)?.NameString.ToString() ?? "Unknown");
                 ImGui.TextUnformatted(
                     "Current Recipe: " + _craftMonitor.CurrentRecipe?.RowId ?? "Unknown");
                 ImGui.TextUnformatted(
@@ -1672,7 +1824,7 @@ namespace InventoryTools.Ui
             // ImGui.EndTable();
         }
 
-        private void DrawCharacterDebugTab()
+        private unsafe void DrawCharacterDebugTab()
         {
             ImGui.TextUnformatted("Character Information:");
             ImGui.TextUnformatted(_characterMonitor.ActiveCharacter?.Name.ToString() ??
@@ -1688,8 +1840,29 @@ namespace InventoryTools.Ui
             ImGui.TextUnformatted("Cached Division Id:" + _characterMonitor.InternalDivisionId.ToString());
             ImGui.TextUnformatted("Cached Room Id:" + _characterMonitor.InternalRoomId.ToString());
             ImGui.TextUnformatted("Cached House Id:" + _characterMonitor.InternalHouseId.ToString());
+
+            var ot = HousingManager.Instance()->OutdoorTerritory;
+            if(ot != null)
+            {
+                ImGui.TextUnformatted(ot->HouseId.ToString());
+            }
+            var it = HousingManager.Instance()->IndoorTerritory;
+            if(it != null)
+            {
+                ImGui.TextUnformatted(it->HouseId.ToString());
+            }
+            var ct = HousingManager.Instance()->CurrentTerritory;
+            if(ct != null)
+            {
+                ImGui.TextUnformatted($"{(ulong)ct:X}");
+            }
+            ImGui.TextUnformatted("Owned House IDS:");
+            foreach (var id in _characterMonitor.GetOwnedHouseIds())
+            {
+                ImGui.TextUnformatted(id.ToString());
+            }
             ImGui.TextUnformatted("Has Housing Permission:" +
-                                  (_characterMonitor.InternalHasHousePermission ? "Yes" : "No"));
+                                  (_characterMonitor.InternalHasHousePermission || _characterMonitor.GetOwnedHouseIds().Contains(_characterMonitor.InternalHouseId) ? "Yes" : "No"));
             ImGui.NewLine();
             ImGui.TextUnformatted("Retainers:");
             ImGui.BeginTable("retainerTable", 6);
@@ -1742,7 +1915,7 @@ namespace InventoryTools.Ui
 
         public override void Invalidate()
         {
-            
+
         }
     }
 }

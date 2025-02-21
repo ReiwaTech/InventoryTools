@@ -2,6 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using AllaganLib.GameSheets.Caches;
+using AllaganLib.GameSheets.Extensions;
+using AllaganLib.GameSheets.Sheets;
+using AllaganLib.GameSheets.Sheets.Rows;
+using AllaganLib.Shared.Extensions;
 using Autofac;
 using CriticalCommonLib;
 using CriticalCommonLib.Addons;
@@ -10,13 +15,11 @@ using CriticalCommonLib.MarketBoard;
 using CriticalCommonLib.Services;
 using CriticalCommonLib.Services.Mediator;
 using CriticalCommonLib.Services.Ui;
-using CriticalCommonLib.Sheets;
+
 using DalaMock.Shared.Interfaces;
 using Dalamud.Game.ClientState.Keys;
 using Dalamud.Interface.Colors;
-using Dalamud.Interface.ImGuiFileDialog;
 using ImGuiNET;
-using InventoryTools.Extensions;
 using InventoryTools.Logic;
 using InventoryTools.Logic.Settings;
 using InventoryTools.Ui.Widgets;
@@ -27,6 +30,7 @@ using InventoryTools.Logic.Filters;
 using InventoryTools.Mediator;
 using InventoryTools.Services;
 using InventoryTools.Services.Interfaces;
+using InventoryTools.Extensions;
 using Microsoft.Extensions.Logging;
 using ImGuiUtil = OtterGui.ImGuiUtil;
 using InventoryItem = FFXIVClientStructs.FFXIV.Client.Game.InventoryItem;
@@ -45,9 +49,9 @@ namespace InventoryTools.Ui
         private readonly IGameUiManager _gameUiManager;
         private readonly InventoryHistory _inventoryHistory;
         private readonly ListImportExportService _importExportService;
-        private readonly ExcelCache _excelCache;
         private readonly IComponentContext _context;
         private readonly FiltersWindowLayoutSetting _layoutSetting;
+        private readonly ItemSheet _itemSheet;
         private readonly IClipboardService _clipboardService;
         private readonly PopupService _popupService;
         private readonly IKeyState _keyState;
@@ -59,7 +63,7 @@ namespace InventoryTools.Ui
             TableService tableService, IChatUtilities chatUtilities, ICharacterMonitor characterMonitor,
             IUniversalis universalis, IFileDialogManager fileDialogManager, IGameUiManager gameUiManager,
             HostedInventoryHistory inventoryHistory, ListImportExportService importExportService,
-            ExcelCache excelCache, IComponentContext context, FiltersWindowLayoutSetting layoutSetting,
+            IComponentContext context, FiltersWindowLayoutSetting layoutSetting, ItemSheet itemSheet,
             IClipboardService clipboardService, PopupService popupService, IKeyState keyState) : base(logger, mediator, imGuiService, configuration, "Filters Window")
         {
             _listService = listService;
@@ -72,9 +76,9 @@ namespace InventoryTools.Ui
             _gameUiManager = gameUiManager;
             _inventoryHistory = inventoryHistory;
             _importExportService = importExportService;
-            _excelCache = excelCache;
             _context = context;
             _layoutSetting = layoutSetting;
+            _itemSheet = itemSheet;
             _clipboardService = clipboardService;
             _popupService = popupService;
             _keyState = keyState;
@@ -1186,6 +1190,7 @@ namespace InventoryTools.Ui
             }
         }
         private string? _newName;
+        private string _filterSearch = "";
         private void DrawSettingsPanel(FilterConfiguration filterConfiguration)
         {
             using (var contentChild = ImRaii.Child("Content", new Vector2(0, -44) * ImGui.GetIO().FontGlobalScale, true))
@@ -1233,12 +1238,28 @@ namespace InventoryTools.Ui
 
                     }
 
+                    var filterSearch = _filterSearch;
+                    ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 5);
+                    if (ImGui.InputTextWithHint("##SearchFilter", "Search...", ref filterSearch, 100))
+                    {
+                        _filterSearch = filterSearch;
+                    }
+                    ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 5);
+
                     using (var tabBar = ImRaii.TabBar("ConfigTabs", ImGuiTabBarFlags.FittingPolicyScroll))
                     {
                         if (tabBar.Success)
                         {
-                            foreach (var group in _filterService.GroupedFilters)
+                            var groupedFilters = _filterService.GroupedFilters;
+                            groupedFilters = groupedFilters.ToDictionary(c => c.Key, c => c.Value.Where(f => f.Name.ToLower().Contains(_filterSearch.ToLower()) || f.HelpText.ToLower().Contains(_filterSearch.ToLower())).ToList());
+                            var hasResults = false;
+                            foreach (var group in groupedFilters)
                             {
+                                if (group.Value.Count == 0)
+                                {
+                                    continue;
+                                }
+                                hasResults = true;
                                 var hasValuesSet = false;
                                 foreach (var filter in group.Value)
                                 {
@@ -1278,7 +1299,7 @@ namespace InventoryTools.Ui
                                          .GameItemFilter)));
                                 if (hasValues)
                                 {
-                                    using (var tabItem = ImRaii.TabItem(group.Key.ToString().ToSentence()))
+                                    using (var tabItem = ImRaii.TabItem(group.Key.FormattedName()))
                                     {
                                         if (!tabItem.Success) continue;
                                         using (ImRaii.PushColor(ImGuiCol.Text, ImGuiColors.DalamudWhite))
@@ -1289,7 +1310,10 @@ namespace InventoryTools.Ui
                                                 {
                                                     if (craftColumns.Success)
                                                     {
+                                                        ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 5);
                                                         group.Value.Single(c => c is CraftColumnsFilter or ColumnsFilter).Draw(filterConfiguration);
+                                                        ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 5);
+                                                        ImGui.Separator();
                                                     }
                                                 }
                                                 using (var otherFilters = ImRaii.Child("otherFilters", new (0, 0)))
@@ -1298,7 +1322,10 @@ namespace InventoryTools.Ui
                                                     {
                                                         foreach (var filter in group.Value.Where(c => c is not CraftColumnsFilter && c is not ColumnsFilter))
                                                         {
+                                                            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 5);
                                                             filter.Draw(filterConfiguration);
+                                                            ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 5);
+                                                            ImGui.Separator();
                                                         }
                                                     }
                                                 }
@@ -1331,11 +1358,25 @@ namespace InventoryTools.Ui
                                                               .GameItemFilter))
                                                         ))
                                                     {
+                                                        ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 5);
                                                         filter.Draw(filterConfiguration);
+                                                        ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 5);
+                                                        ImGui.Separator();
                                                     }
                                                 }
                                             }
                                         }
+                                    }
+                                }
+                            }
+
+                            if (!hasResults)
+                            {
+                                using (var tabItem = ImRaii.TabItem("No results found"))
+                                {
+                                    if (tabItem.Success)
+                                    {
+
                                     }
                                 }
                             }
@@ -1630,7 +1671,7 @@ namespace InventoryTools.Ui
             return filterConfiguration.Key;
         }
 
-        private void DrawSearchRow(FilterConfiguration filterConfiguration, ItemEx item)
+        private void DrawSearchRow(FilterConfiguration filterConfiguration, ItemRow item)
         {
             ImGui.TableNextColumn();
             ImGui.TextWrapped( item.NameString);
@@ -1643,7 +1684,7 @@ namespace InventoryTools.Ui
             {
                 if (popup.Success)
                 {
-                    MediatorService.Publish(ImGuiService.RightClickService.DrawRightClickPopup(item));
+                    MediatorService.Publish(ImGuiService.ImGuiMenuService.DrawRightClickPopup(item));
                 }
             }
             ImGui.TableNextColumn();
@@ -1694,20 +1735,20 @@ namespace InventoryTools.Ui
         }
 
         private string _searchString = "";
-        private List<ItemEx>? _searchItems;
-        public List<ItemEx> SearchItems
+        private List<ItemRow>? _searchItems;
+        public List<ItemRow> SearchItems
         {
             get
             {
                 if (SearchString == "")
                 {
-                    _searchItems = new List<ItemEx>();
+                    _searchItems = new List<ItemRow>();
                     return _searchItems;
                 }
                 if (_searchItems == null)
                 {
-                    _searchItems = _excelCache.ItemNamesById.Where(c => c.Value.ToLower().PassesFilter(SearchString.ToLower())).Take(100)
-                        .Select(c => _excelCache.GetItemExSheet().GetRow(c.Key)!).ToList();
+                    _searchItems = _itemSheet.Where(c => c.NameString.ToLower().PassesFilter(SearchString.ToLower())).Take(100)
+                        .Select(c => _itemSheet.GetRow(c.RowId)).ToList();
                 }
 
                 return _searchItems;

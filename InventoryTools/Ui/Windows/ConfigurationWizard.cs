@@ -1,13 +1,13 @@
 using System.Collections.Generic;
 using System.Numerics;
 using CriticalCommonLib.Services.Mediator;
+
 using Dalamud.Interface.Colors;
 using ImGuiNET;
 using InventoryTools.Logic;
 using InventoryTools.Logic.Features;
 using InventoryTools.Mediator;
 using InventoryTools.Services;
-using InventoryTools.Services.Interfaces;
 using Microsoft.Extensions.Logging;
 using OtterGui.Raii;
 
@@ -51,7 +51,7 @@ public class ConfigurationWizard : GenericWindow
         }
         else if(_currentFeature == _availableFeatures.Count)
         {
-            
+
         }
         else
         {
@@ -66,7 +66,7 @@ public class ConfigurationWizard : GenericWindow
             _currentFeature--;
         }
     }
-    
+
     public override void Draw()
     {
         using (var sideBar = ImRaii.Child("sideBar", new Vector2(150, 0) * ImGui.GetIO().FontGlobalScale, true))
@@ -159,8 +159,7 @@ public class ConfigurationWizard : GenericWindow
                                     foreach (var setting in _configurationWizardService.GetApplicableSettings(feature))
                                     {
                                         ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 5);
-                                        setting.LabelSize = (int)(ImGui.GetWindowContentRegionMax().X - 20);
-                                        setting.Draw(_configuration);
+                                        setting.Draw(_configuration, setting.WizardName, true, true);
                                         ImGui.SetCursorPosY(ImGui.GetCursorPosY() + 5);
                                     }
                                 }

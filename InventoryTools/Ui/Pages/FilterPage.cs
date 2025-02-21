@@ -2,9 +2,11 @@ using System.Collections.Generic;
 using System.Linq;
 using CriticalCommonLib.Services;
 using CriticalCommonLib.Services.Mediator;
+
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Utility.Raii;
 using ImGuiNET;
+using InventoryTools.Extensions;
 using InventoryTools.Lists;
 using InventoryTools.Logic;
 using InventoryTools.Logic.Filters;
@@ -134,7 +136,7 @@ namespace InventoryTools.Ui.Pages
                         (filter.AvailableIn.HasFlag(FilterType.CuratedList) &&
                          filterConfiguration.FilterType.HasFlag(FilterType
                              .CuratedList)));
-                    if (hasValues && ImGui.BeginTabItem(group.Key.ToString()))
+                    if (hasValues && ImGui.BeginTabItem(group.Key.FormattedName()))
                     {
                         ImGui.PushStyleColor(ImGuiCol.Text, ImGuiColors.DalamudWhite);
                         if (group.Key == FilterCategory.CraftColumns)

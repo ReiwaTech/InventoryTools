@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using Dalamud.Game.ClientState.Keys;
-using Dalamud.Interface.Colors;
 using ImGuiNET;
 using InventoryTools.Services;
 using Microsoft.Extensions.Logging;
@@ -34,17 +33,18 @@ namespace InventoryTools.Logic.Settings.Abstract
                 configuration.Hotkeys[Key] = newValue;
             }
         }
-        public override void Draw(InventoryToolsConfiguration configuration)
+        public override void Draw(InventoryToolsConfiguration configuration, string? customName, bool? disableReset,
+            bool? disableColouring)
         {
-            Widget.ModifiableKeySelector(Name, HelpText, InputSize, CurrentValue(configuration),
+            Widget.ModifiableKeySelector(customName ?? Name, HelpText, InputSize, CurrentValue(configuration),
                 delegate(ModifiableHotkey hotkey)
                 {
                     UpdateFilterConfiguration(configuration, hotkey);
                 }, _virtualKeys);
-            
+
             ImGui.SameLine();
             ImGuiService.HelpMarker(HelpText, Image, ImageSize);
-            if (!HideReset && HasValueSet(configuration))
+            if (disableReset != true && HasValueSet(configuration))
             {
                 ImGui.SameLine();
                 if (ImGui.Button("Reset##" + Key + "Reset"))
@@ -53,6 +53,6 @@ namespace InventoryTools.Logic.Settings.Abstract
                 }
             }
         }
-        
+
     }
 }

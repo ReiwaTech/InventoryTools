@@ -1,9 +1,10 @@
+using AllaganLib.Shared.Time;
 using Autofac;
 using CriticalCommonLib.Crafting;
 using CriticalCommonLib.Interfaces;
 using CriticalCommonLib.Services;
 using CriticalCommonLib.Services.Ui;
-using CriticalCommonLib.Time;
+
 using DalaMock.Core.Mocks;
 using DalaMock.Core.Windows;
 using DalaMock.Host.Factories;
@@ -61,6 +62,7 @@ public class InventoryToolsPluginMock : InventoryToolsPlugin
             container.RegisterType<MockSeTime>().As<ISeTime>().SingleInstance();
             container.RegisterType<MockWindowSystem>().As<IWindowSystem>().SingleInstance();
             container.RegisterType<MockGameInteropService>().As<IGameInteropService>().SingleInstance();
+            container.RegisterType<MockUnlockTrackerService>().As<IUnlockTrackerService>().SingleInstance();
             container.RegisterType<MockQuestManagerService>().AsImplementedInterfaces().SingleInstance();
             container.RegisterType<MockStartup>().AsImplementedInterfaces().SingleInstance();
             container.RegisterType<MockFileDialogManager>().AsImplementedInterfaces().SingleInstance();
